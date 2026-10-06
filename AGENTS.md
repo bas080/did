@@ -11,10 +11,11 @@ Welcome! This repository uses `did`, a filesystem-native task and dependency tra
 - **Iterative Refinement**: Formulate precise questions to ensure 100% certainty on user expectations. Update plans via `set_plan` once requirements are approved.
 
 ### 2. Filesystem-Native Issue Lifecycle (`.did/`)
-- **Directory Hierarchy Standard**: Directly under `.did/`, ONLY `implement` and `refine` (and reserved `.hooks`) exist. Sub-categories (e.g. `github-actions`, `features`, `tasks`) are placed inside `implement/` or `refine/`.
+- **Directory Hierarchy Standard**: Directly under `.did/`, ONLY `implement`, `refine`, and `wont` (plus reserved `.hooks`) exist. Sub-categories (e.g. `github-actions`, `features`, `tasks`) are placed inside `implement/` or `refine/`.
 - **Staging in `.did/refine/`**: New, unrefined, or open proposal issues stay in `.did/refine/`.
 - **Promotion to `.did/implement/`**: Move issues to `.did/implement/` only when they are **100% ready**, with explicit requirements, edge cases, and concrete test plans.
 - **Demotion Back to `.did/refine/` on Vagueness**: When evaluating `did status implement`, if any issue contains vagueness, ambiguity, or open questions, **move it back to `.did/refine/`** and append explicit clarifying questions to the issue document.
+- **Documenting Rejected Proposals in `.did/wont/`**: When a feature proposal, command idea, or design decision is rejected, document it inside `.did/wont/<PROPOSAL>/issue.md` explaining the decision and rationale for not adopting it.
 - **Discovering Bugs/Features**: Whenever you discover a bug, issue, or needed feature while working, create a `did` issue for it:
   ```bash
   did add refine/describe-feature/issue.md -m "Detailed issue description"
