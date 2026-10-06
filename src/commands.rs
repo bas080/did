@@ -4,10 +4,21 @@ use crate::cli::Commands;
 use crate::repo::Repo;
 use std::env;
 use std::fs;
-use std::os::unix::fs::symlink;
 use std::path::{Component, Path, PathBuf};
 use std::process::{Command, ExitCode};
 use walkdir::WalkDir;
+
+#[cfg(unix)]
+use std::os::unix::fs::symlink;
+
+#[cfg(windows)]
+fn symlink<P: AsRef<Path>, Q: AsRef<Path>>(original: P, link: Q) -> std::io::Result<()> {
+    if original.as_ref().is_dir() {
+        std::os::windows::fs::symlink_dir(original, link)
+    } else {
+        std::os::windows::fs::symlink_file(original, link)
+    }
+}
 
 pub fn run(repo_opt: Option<Repo>, command: Commands, global_all: bool) -> ExitCode {
     match command {
@@ -611,7 +622,12 @@ fn has_sibling_task_file(parent_dir: &Path, dir_name: &str) -> bool {
         for entry in entries.flatten() {
             let p = entry.path();
             if p.is_file() {
-                let stem = p.file_stem().unwrap_or_default().to_string_lossy();
+                let name = p.file_name().unwrap_or_default().to_string_lossy();
+                let clean_name = name.strip_prefix('.').unwrap_or(&name);
+                let stem = Path::new(clean_name)
+                    .file_stem()
+                    .unwrap_or_default()
+                    .to_string_lossy();
                 if stem == dir_name {
                     return true;
                 }
