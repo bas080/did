@@ -1,31 +1,44 @@
-# Agent Instructions & Workflow
+# Agent Instructions & Established Way of Working
 
-Welcome! This codebase uses `did`, a filesystem-native task and dependency tracker.
+Welcome! This repository uses `did`, a filesystem-native task and dependency tracker written in Rust.
 
-## `did` Task Tracking Workflow
+---
 
-When working on this repository, follow these guidelines:
+## Established Way of Working
 
-1. **Check Actionable Tasks**:
-   - Run `did status` to list current actionable tasks.
-   - Run `did status -a` to view all tasks (including blocked and completed tasks).
+### 1. Deep Planning Mode & Requirements Clarification
+- **Zero Doubt Requirement**: Before writing code or modifying plans, perform exploratory research and ask clarifying questions to test every assumption.
+- **Iterative Refinement**: Formulate precise questions to ensure 100% certainty on user expectations. Update plans via `set_plan` once requirements are approved.
 
-2. **Creating Issues for Found Problems**:
-   - **Whenever you discover an issue, bug, or needed feature while working in the repository, you MUST create a `did` issue for it.**
-   - Example:
-     ```bash
-     did add issues/fix-symlink-resolution.md -m "Describe the issue clearly here"
-     ```
+### 2. Filesystem-Native Issue Lifecycle (`.did/`)
+- **Staging in `.did/refine/`**: New, unrefined, or open proposal issues stay in `.did/refine/`.
+- **Promotion to `.did/implement/`**: Only move issues to `.did/implement/` when they are **100% ready**, with explicit requirements, edge cases, and concrete test plans. If in doubt, leave them in `.did/refine/`.
+- **Discovering Bugs/Features**: Whenever you discover a bug, issue, or needed feature while working, create a `did` issue for it:
+  ```bash
+  did add issues/describe-feature.md -m "Detailed issue description"
+  ```
 
-3. **Inspecting Task Content**:
-   - View task details with `did show <PATH>` (e.g., `did show issues/fix-symlink-resolution.md`).
+### 3. Hook Directory Sanctity (`.hooks/`)
+- `.hooks/` directories inside `.did/` subtrees are strictly reserved for hook files (`show`, `status`, `done`, `add`, `link`, `mv`, or with extensions like `show.sh`, `show.md`).
+- **Never** place issue/task files directly inside `.hooks/`. Place issue files describing hook features in a separate directory (e.g., `dot-hooks/`).
+- Hook files starting with `.hooks/` are hidden in status listings and do not act as blocking sub-items for sibling tasks.
 
-4. **Linking Dependencies**:
-   - Link dependent tasks/issues into directories using `did link <TARGET> <DEST_DIR>`.
+### 4. Testing, Quality Control, and Coverage
+- **Automated Integration Tests**: Every code modification or feature must be accompanied by tests in `tests/cli_tests.rs`.
+- **Verification Commands**:
+  - Run all tests: `cargo test`
+  - Linting: `cargo clippy -- -D warnings`
+  - Code coverage check: `cargo llvm-cov --fail-under-lines 76`
 
-5. **Completing Tasks**:
-   - When a task or issue is resolved, mark it complete:
-     ```bash
-     did done <PATH>
-     ```
-   - This renames the file with a leading dot (`.`) and updates linked dependencies.
+### 5. `did` CLI Core Usage Commands
+- **Check Actionable Tasks**: `did status`
+- **Check All Tasks (including blocked/closed)**: `did status -a`
+- **Inspect Task Content**: `did show <PATH>`
+- **Link Dependencies**: `did link <TARGET> <DEST_DIR>`
+- **Complete Task**: `did done <PATH>` (renames to `.task` and updates inbound symlinks)
+- **Telemetry Logging**: Activate XML execution logging by setting `DID_LOG_PATH=.did.log`.
+
+### 6. CI & Release Conventions
+- **GitHub Actions Workflows**:
+  - `test.yml`: Runs tests, clippy, and `cargo-llvm-cov` checks on all branch pushes and PRs.
+  - `release-linux.yml`: Pushes to `main`/`master` update the `development` binary release asset. Version tag pushes (`v*`) update the `latest` version release asset.
