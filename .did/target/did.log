@@ -1,0 +1,16 @@
+<invocation timestamp="1791291854" exit_code="0">
+  <command>Status { path: Some(&quot;implement&quot;) }</command>
+  <args>
+    <arg>./target/debug/did</arg>
+    <arg>status</arg>
+    <arg>implement</arg>
+  </args>
+</invocation>
+<invocation timestamp="1791291943" exit_code="0">
+  <command>Status { path: Some(&quot;implement&quot;) }</command>
+  <args>
+    <arg>./target/debug/did</arg>
+    <arg>status</arg>
+    <arg>implement</arg>
+  </args>
+</invocation>

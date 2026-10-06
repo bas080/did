@@ -195,6 +195,10 @@ fn cmd_link(repo: &Repo, target_raw: &Path, dest_raw: &Path) -> ExitCode {
     ExitCode::SUCCESS
 }
 
+fn is_ignored_directory(name: &str) -> bool {
+    name == ".hooks" || name == "hooks" || name == "target"
+}
+
 fn cmd_status(repo: &Repo, raw_path: Option<&Path>, all: bool) -> ExitCode {
     let root_path = match raw_path {
         Some(p) => repo.resolve_path(p),
@@ -215,10 +219,7 @@ fn cmd_status(repo: &Repo, raw_path: Option<&Path>, all: bool) -> ExitCode {
 
     for entry in WalkDir::new(&root_path)
         .into_iter()
-        .filter_entry(|e| {
-            let name = e.file_name().to_string_lossy();
-            name != ".hooks" && name != "hooks"
-        })
+        .filter_entry(|e| !is_ignored_directory(&e.file_name().to_string_lossy()))
         .filter_map(|e| e.ok())
     {
         let path = entry.path();
@@ -278,10 +279,7 @@ fn cmd_search(repo: &Repo, query: &str, raw_path: Option<&Path>, all: bool) -> E
 
     for entry in WalkDir::new(&root_path)
         .into_iter()
-        .filter_entry(|e| {
-            let name = e.file_name().to_string_lossy();
-            name != ".hooks" && name != "hooks"
-        })
+        .filter_entry(|e| !is_ignored_directory(&e.file_name().to_string_lossy()))
         .filter_map(|e| e.ok())
     {
         let path = entry.path();
@@ -667,7 +665,7 @@ fn get_unresolved_blocking_items(repo: &Repo, task_file: &Path) -> Vec<String> {
             let is_symlink = p.is_symlink();
             if p.is_dir() && !is_symlink {
                 let dir_name = p.file_name().unwrap_or_default().to_string_lossy();
-                if dir_name == "hooks" || dir_name == ".hooks" {
+                if is_ignored_directory(&dir_name) {
                     continue;
                 }
                 if !dir_name.starts_with('.') {
@@ -690,7 +688,7 @@ fn get_unresolved_blocking_items(repo: &Repo, task_file: &Path) -> Vec<String> {
 
 fn collect_unresolved_in_dir(repo: &Repo, dir: &Path, items: &mut Vec<String>) {
     let dir_name = dir.file_name().unwrap_or_default().to_string_lossy();
-    if dir_name == "hooks" || dir_name == ".hooks" {
+    if is_ignored_directory(&dir_name) {
         return;
     }
     for entry in WalkDir::new(dir).into_iter().filter_map(|e| e.ok()) {

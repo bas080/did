@@ -15,5 +15,8 @@ Proposes adding a `-b` / `--blocked` flag to `did status` and `did search`. Whil
 - Displays only tasks that are blocked by unresolved child subdirectories or broken dependencies.
 - Prints `No blocked tasks found.` to `stderr` if no blocked tasks exist in the selected subtree.
 
-### 3. Mutual Exclusivity / Precedence
-- If both `-a` and `-b` are passed, `-b` takes precedence or filters `-a` output to blocked items only.
+---
+
+## Open Clarifying Questions for Refinement
+1. **Precedence with `-a`**: If both `-a` and `-b` are passed, should `-b` strictly override `-a` (showing only open blocked tasks) or filter `-a` (showing resolved blocked tasks as well)?
+2. **Limit Behavior**: Should blocked task results count towards `DID_STATUS_LIMIT` truncations?

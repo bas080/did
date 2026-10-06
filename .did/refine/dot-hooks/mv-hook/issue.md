@@ -23,6 +23,8 @@ Defines the lifecycle hook for `did mv <OLD_PATH> <NEW_PATH>`. The `mv` hook all
 - **Exit Code 0**: Move is permitted. `did mv` continues execution.
 - **Non-Zero Exit Code**: Move is disallowed. `did mv` aborts immediately, performs no file operations, and exits with non-zero status.
 
-### 4. Output Reporting
-- The `mv` hook script can print explanations or validation details to `stdout` or `stderr`.
-- `did mv` forwards the script's `stdout` and `stderr` directly to the terminal, allowing the script to communicate success or failure reasons to the user.
+---
+
+## Open Clarifying Questions for Refinement
+1. **Invocation Order**: Should `.hooks/mv` run before validating that `OLD_PATH` exists, or only after confirming valid paths?
+2. **Directory vs File Moves**: If `OLD_PATH` is a directory containing multiple sub-tasks, should `.hooks/mv` run once for the top directory or once per contained file?
