@@ -148,7 +148,8 @@ fn cmd_add(repo: &Repo, raw_path: &Path, message: Option<String>) -> ExitCode {
 
         for hook_p in active_hooks {
             if is_executable(&hook_p) {
-                let output = Command::new(&hook_p)
+                let mut cmd = setup_hook_cmd(repo, &hook_p, "add", &target_rel);
+                let output = cmd
                     .arg(&target_rel)
                     .arg(msg_arg)
                     .output();
@@ -325,11 +326,25 @@ fn update_symlinks_for_mv(repo: &Repo, old_path: &Path, new_path: &Path) {
                     let new_abs_target = new_norm.join(sub_rel);
 
                     if let Some(new_rel_target) = compute_relative_path(parent, &new_abs_target) {
+                        if std::env::var("DID_DEBUG").map(|v| !v.is_empty()).unwrap_or(false) {
+                            eprintln!(
+                                "[DEBUG] Symlink updated: '{}' -> '{}'",
+                                sym_path.display(),
+                                new_rel_target.display()
+                            );
+                        }
                         let _ = fs::remove_file(sym_path);
                         let _ = symlink(&new_rel_target, sym_path);
                     }
                 } else if sym_path.starts_with(&new_norm) {
                     if let Some(new_rel_target) = compute_relative_path(parent, &norm_target) {
+                        if std::env::var("DID_DEBUG").map(|v| !v.is_empty()).unwrap_or(false) {
+                            eprintln!(
+                                "[DEBUG] Symlink updated: '{}' -> '{}'",
+                                sym_path.display(),
+                                new_rel_target.display()
+                            );
+                        }
                         let _ = fs::remove_file(sym_path);
                         let _ = symlink(&new_rel_target, sym_path);
                     }
@@ -562,6 +577,16 @@ fn is_reserved_hook_file(path: &Path) -> bool {
     false
 }
 
+fn setup_hook_cmd(repo: &Repo, hook_p: &Path, event: &str, target_rel: &str) -> Command {
+    let mut cmd = Command::new(hook_p);
+    cmd.env("DID_EVENT", event);
+    cmd.env("DID_TARGET", target_rel);
+    let root_dir = repo.did_dir.parent().unwrap_or(&repo.did_dir);
+    cmd.env("DID_REPO_ROOT", root_dir);
+    cmd.env("DID_STATE_DIR", &repo.did_dir);
+    cmd
+}
+
 fn find_hook_files(ancestor_dir: &Path, event: &str) -> Vec<PathBuf> {
     let mut matches = Vec::new();
 
@@ -574,6 +599,13 @@ fn find_hook_files(ancestor_dir: &Path, event: &str) -> Vec<PathBuf> {
                     if path.is_file() {
                         if let Some(stem) = path.file_stem() {
                             if stem.to_string_lossy() == event {
+                                if std::env::var("DID_DEBUG").map(|v| !v.is_empty()).unwrap_or(false) {
+                                    eprintln!(
+                                        "[DEBUG] Hook check in '{}': found '{}'",
+                                        ancestor_dir.display(),
+                                        path.display()
+                                    );
+                                }
                                 matches.push(path);
                             }
                         }
@@ -640,12 +672,15 @@ fn cmd_show(repo: &Repo, raw_path: &Path, all: bool) -> ExitCode {
 
     let mut printed_any = false;
 
+    let target_rel = repo.relative_display_path(&target_path);
+
     for dir in ancestor_dirs {
         let active_hooks = find_hook_files(&dir, "show");
 
         for hook_p in active_hooks {
             if is_executable(&hook_p) {
-                let output = Command::new(&hook_p).output();
+                let mut cmd = setup_hook_cmd(repo, &hook_p, "show", &target_rel);
+                let output = cmd.output();
                 match output {
                     Ok(out) => {
                         if printed_any {
@@ -762,7 +797,8 @@ fn cmd_done(repo: &Repo, raw_path: &Path) -> ExitCode {
 
         for hook_p in active_hooks {
             if is_executable(&hook_p) {
-                let output = Command::new(&hook_p).arg(&target_rel).output();
+                let mut cmd = setup_hook_cmd(repo, &hook_p, "done", &target_rel);
+                let output = cmd.arg(&target_rel).output();
                 match output {
                     Ok(out) => {
                         let stdout_str = String::from_utf8_lossy(&out.stdout);
@@ -960,6 +996,15 @@ fn get_unresolved_blocking_items(repo: &Repo, task_file: &Path) -> Vec<String> {
 
     items.sort();
     items.dedup();
+
+    if !items.is_empty() && std::env::var("DID_DEBUG").map(|v| !v.is_empty()).unwrap_or(false) {
+        eprintln!(
+            "[DEBUG] Blocking check for '{}': {} unresolved child sub-items found",
+            repo.relative_display_path(task_file),
+            items.len()
+        );
+    }
+
     items
 }
 
@@ -1042,6 +1087,14 @@ fn update_symlinks(repo: &Repo, old_target: &Path, new_target: &Path) {
 
                     let new_rel_target = compute_relative_path(parent, new_target)
                         .unwrap_or_else(|| new_target.to_path_buf());
+
+                    if std::env::var("DID_DEBUG").map(|v| !v.is_empty()).unwrap_or(false) {
+                        eprintln!(
+                            "[DEBUG] Symlink updated: '{}' -> '{}'",
+                            path.display(),
+                            new_rel_target.display()
+                        );
+                    }
 
                     let _ = fs::remove_file(path);
                     let _ = symlink(&new_rel_target, &new_sym_path);

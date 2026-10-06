@@ -311,6 +311,41 @@ fn test_autocomplete() {
 }
 
 #[test]
+fn test_debug_logging() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    fs::create_dir_all(root.join(".did")).unwrap();
+
+    let (success, _, stderr) = did_cmd_env(
+        root,
+        &["add", "backend/auth/jwt.md", "-m", "Content"],
+        &[("DID_DEBUG", "1")],
+    );
+    assert!(success);
+    assert!(stderr.contains("[DEBUG] Repo path resolved:"));
+
+    did_cmd(root, &["add", "backend/auth/jwt/sub.md", "-m", "Subtask"]);
+
+    let (_, _, stderr_show) = did_cmd_env(
+        root,
+        &["show", "backend/auth/jwt.md"],
+        &[("DID_DEBUG", "1")],
+    );
+    assert!(stderr_show.contains("[DEBUG] Blocking check for 'backend/auth/jwt.md': 1 unresolved child sub-items found"));
+
+    did_cmd(root, &["done", "backend/auth/jwt/sub.md"]);
+
+    let (success_done, _, stderr_done) = did_cmd_env(
+        root,
+        &["done", "backend/auth/jwt.md"],
+        &[("DID_DEBUG", "1")],
+    );
+    assert!(success_done);
+    assert!(stderr_done.contains("[DEBUG] Repo path resolved:"));
+}
+
+#[test]
 fn test_parent_repo_search() {
     let dir = tempdir().unwrap();
     let root = dir.path();
@@ -518,6 +553,36 @@ fn test_executable_add_hook_abort() {
 }
 
 #[test]
+fn test_editor_invocation_success_add() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    fs::create_dir_all(root.join(".did")).unwrap();
+
+    let script = root.join("my_editor.sh");
+    fs::write(&script, "#!/bin/sh\necho 'Editor Content' >> \"$1\"\n").unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(&script).unwrap().permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&script, perms).unwrap();
+    }
+
+    let (success, _, _) = did_cmd_env(
+        root,
+        &["add", "editor_task.md"],
+        &[("EDITOR", script.to_str().unwrap())],
+    );
+    assert!(success);
+
+    let task_path = root.join(".did/editor_task.md");
+    assert!(task_path.is_file());
+    let content = fs::read_to_string(task_path).unwrap();
+    assert!(content.contains("Editor Content"));
+}
+
+#[test]
 fn test_editor_failure_fails_add() {
     let dir = tempdir().unwrap();
     let root = dir.path();
@@ -628,6 +693,313 @@ fn test_executable_done_hook_abort() {
         let (success, _, _) = did_cmd(root, &["done", "task.md"]);
         assert!(!success);
         assert!(root.join(".did/task.md").is_file());
+    }
+}
+
+#[test]
+fn test_hook_environment_variables() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    fs::create_dir_all(root.join(".did")).unwrap();
+
+    let hook = root.join(".did/.hooks/show");
+    fs::create_dir_all(hook.parent().unwrap()).unwrap();
+    fs::write(
+        &hook,
+        "#!/bin/sh\necho EVENT=$DID_EVENT\necho TARGET=$DID_TARGET\necho REPO=$DID_REPO_ROOT\necho STATE=$DID_STATE_DIR\n",
+    )
+    .unwrap();
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(&hook).unwrap().permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&hook, perms).unwrap();
+
+        did_cmd(root, &["add", "task.md", "-m", "Task content"]);
+
+        let (success, stdout, _) = did_cmd(root, &["show", "task.md"]);
+        assert!(success);
+        assert!(stdout.contains("EVENT=show"));
+        assert!(stdout.contains("TARGET=task.md"));
+        assert!(stdout.contains("REPO="));
+        assert!(stdout.contains("STATE="));
+    }
+}
+
+#[test]
+fn test_commands_require_repo_fails() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    let (s1, _, err1) = did_cmd(root, &["status"]);
+    assert!(!s1);
+    assert!(err1.contains("error: no .did state directory found"));
+
+    let (s2, _, err2) = did_cmd(root, &["show", "task.md"]);
+    assert!(!s2);
+    assert!(err2.contains("error: no .did state directory found"));
+
+    let (s3, _, err3) = did_cmd(root, &["done", "task.md"]);
+    assert!(!s3);
+    assert!(err3.contains("error: no .did state directory found"));
+
+    let (s4, _, err4) = did_cmd(root, &["undone", "task.md"]);
+    assert!(!s4);
+    assert!(err4.contains("error: no .did state directory found"));
+
+    let (s5, _, err5) = did_cmd(root, &["link", "target.md", "dest"]);
+    assert!(!s5);
+    assert!(err5.contains("error: no .did state directory found"));
+
+    let (s6, _, err6) = did_cmd(root, &["mv", "old.md", "new.md"]);
+    assert!(!s6);
+    assert!(err6.contains("error: no .did state directory found"));
+
+    let (s7, _, err7) = did_cmd(root, &["search", "query"]);
+    assert!(!s7);
+    assert!(err7.contains("error: no .did state directory found"));
+}
+
+#[test]
+fn test_add_non_executable_hook_and_no_newline_msg() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    fs::create_dir_all(root.join(".did")).unwrap();
+
+    let hook = root.join(".did/.hooks/add");
+    fs::create_dir_all(hook.parent().unwrap()).unwrap();
+    fs::write(&hook, "Static Add Hook Guidance").unwrap();
+
+    let (success, stdout, _) = did_cmd(root, &["add", "task1.md", "-m", "No newline message"]);
+    assert!(success);
+    assert!(stdout.contains("Static Add Hook Guidance"));
+
+    let task_content = fs::read_to_string(root.join(".did/task1.md")).unwrap();
+    assert_eq!(task_content, "No newline message\n");
+}
+
+#[test]
+fn test_add_hook_stdout_stderr_handling() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    fs::create_dir_all(root.join(".did")).unwrap();
+
+    let hook = root.join(".did/.hooks/add");
+    fs::create_dir_all(hook.parent().unwrap()).unwrap();
+    fs::write(&hook, "#!/bin/sh\nprintf 'hook stdout'\n>&2 printf 'hook stderr'\nexit 0\n").unwrap();
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(&hook).unwrap().permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&hook, perms).unwrap();
+
+        let (success, stdout, stderr) = did_cmd(root, &["add", "task2.md", "-m", "Content"]);
+        assert!(success);
+        assert!(stdout.contains("hook stdout"));
+        assert!(stderr.contains("hook stderr"));
+    }
+}
+
+#[test]
+fn test_link_destination_exists_fails() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    fs::create_dir_all(root.join(".did")).unwrap();
+
+    did_cmd(root, &["add", "target.md", "-m", "Target"]);
+    did_cmd(root, &["add", "dest/target.md", "-m", "Already there"]);
+
+    let (success, _, stderr) = did_cmd(root, &["link", "target.md", "dest"]);
+    assert!(!success);
+    assert!(stderr.contains("destination path already exists"));
+}
+
+#[test]
+fn test_show_non_existent_file_fails() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    fs::create_dir_all(root.join(".did")).unwrap();
+
+    let (success, _, stderr) = did_cmd(root, &["show", "non_existent.md"]);
+    assert!(!success);
+    assert!(stderr.contains("path does not exist"));
+}
+
+#[test]
+fn test_done_directory_non_existent_and_already_done() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    fs::create_dir_all(root.join(".did/sub")).unwrap();
+
+    let (s1, _, err1) = did_cmd(root, &["done", "sub"]);
+    assert!(!s1);
+    assert!(err1.contains("cannot complete a directory"));
+
+    let (s2, _, err2) = did_cmd(root, &["done", "non_existent.md"]);
+    assert!(!s2);
+    assert!(err2.contains("path does not exist"));
+
+    did_cmd(root, &["add", "task.md", "-m", "Done task"]);
+    did_cmd(root, &["done", "task.md"]);
+
+    let (s3, _, _) = did_cmd(root, &["done", ".task.md"]);
+    assert!(s3);
+}
+
+#[test]
+fn test_undone_directory_non_existent_not_resolved_collision() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    fs::create_dir_all(root.join(".did/sub")).unwrap();
+
+    let (s1, _, err1) = did_cmd(root, &["undone", "sub"]);
+    assert!(!s1);
+    assert!(err1.contains("cannot undone a directory"));
+
+    let (s2, _, err2) = did_cmd(root, &["undone", "non_existent.md"]);
+    assert!(!s2);
+    assert!(err2.contains("path does not exist"));
+
+    did_cmd(root, &["add", "open_task.md", "-m", "Open task"]);
+
+    let (s3, _, err3) = did_cmd(root, &["undone", "open_task.md"]);
+    assert!(!s3);
+    assert!(err3.contains("is not resolved"));
+
+    did_cmd(root, &["add", "colliding.md", "-m", "Open collision"]);
+    fs::write(root.join(".did/.colliding.md"), "Done collision").unwrap();
+
+    let (s4, _, err4) = did_cmd(root, &["undone", ".colliding.md"]);
+    assert!(!s4);
+    assert!(err4.contains("target path already exists"));
+}
+
+#[test]
+fn test_status_and_search_non_existent_path_fails() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    fs::create_dir_all(root.join(".did")).unwrap();
+
+    let (s1, _, err1) = did_cmd(root, &["status", "non_existent"]);
+    assert!(!s1);
+    assert!(err1.contains("path does not exist"));
+
+    let (s2, _, err2) = did_cmd(root, &["search", "query", "non_existent"]);
+    assert!(!s2);
+    assert!(err2.contains("path does not exist"));
+}
+
+#[test]
+fn test_execution_logging_absolute_path() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    fs::create_dir_all(root.join(".did")).unwrap();
+
+    let abs_log = root.join("did_abs.log");
+    let (success, _, _) = did_cmd_env(
+        root,
+        &["status"],
+        &[("DID_LOG_PATH", abs_log.to_str().unwrap())],
+    );
+    assert!(success);
+    assert!(abs_log.is_file());
+}
+
+#[test]
+fn test_autocomplete_all_shells() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    for shell in &["zsh", "fish", "powershell", "elvish"] {
+        let (success, stdout, _) = did_cmd(root, &["autocomplete", shell]);
+        assert!(success);
+        assert!(!stdout.is_empty());
+    }
+}
+
+#[test]
+fn test_limit_env_did_limit() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    fs::create_dir_all(root.join(".did")).unwrap();
+
+    did_cmd(root, &["add", "task1.md", "-m", "1"]);
+    did_cmd(root, &["add", "task2.md", "-m", "2"]);
+
+    let (success, _, stderr) = did_cmd_env(
+        root,
+        &["status"],
+        &[("DID_STATUS_LIMIT", ""), ("DID_LIMIT", "1")],
+    );
+    assert!(success);
+    assert!(stderr.contains("status limit reached (1/2 items shown)"));
+}
+
+#[test]
+fn test_done_hook_stdout_and_stderr() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    fs::create_dir_all(root.join(".did")).unwrap();
+
+    did_cmd(root, &["add", "task.md", "-m", "Task"]);
+
+    let hook = root.join(".did/.hooks/done");
+    fs::create_dir_all(hook.parent().unwrap()).unwrap();
+    fs::write(&hook, "#!/bin/sh\nprintf 'done stdout'\n>&2 printf 'done stderr'\nexit 0\n").unwrap();
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(&hook).unwrap().permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&hook, perms).unwrap();
+
+        let (success, stdout, stderr) = did_cmd(root, &["done", "task.md"]);
+        assert!(success);
+        assert!(stdout.contains("done stdout"));
+        assert!(stderr.contains("done stderr"));
+    }
+}
+
+#[test]
+fn test_show_hook_stdout_no_newline_and_stderr_failure() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    fs::create_dir_all(root.join(".did")).unwrap();
+
+    did_cmd(root, &["add", "task.md", "-m", "Task"]);
+
+    let hook = root.join(".did/.hooks/show");
+    fs::create_dir_all(hook.parent().unwrap()).unwrap();
+    fs::write(&hook, "#!/bin/sh\nprintf 'show stdout'\n>&2 printf 'show error'\nexit 1\n").unwrap();
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(&hook).unwrap().permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&hook, perms).unwrap();
+
+        let (success, stdout, stderr) = did_cmd(root, &["show", "task.md"]);
+        assert!(!success);
+        assert!(stdout.contains("show stdout"));
+        assert!(stderr.contains("show error"));
     }
 }
 

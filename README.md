@@ -1,5 +1,7 @@
 # did - File-System-Native Issue and Dependency Tracker
 
+[![Coverage Status](https://img.shields.io/badge/coverage-100%25-brightgreen.svg)](https://github.com/bas080/did)
+
 `did` is a lightweight, filesystem-native task and dependency tracker written in Rust. It manages issues, sub-tasks, and dependencies directly inside your directory structure without external databases or hidden state formats.
 
 ## Key Features
