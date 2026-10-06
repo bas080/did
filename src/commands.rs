@@ -564,6 +564,7 @@ fn get_unresolved_blocking_items(repo: &Repo, task_file: &Path) -> Vec<String> {
         None => return Vec::new(),
     };
 
+    let is_root_dir = parent_dir == repo.did_dir;
     let task_stem = task_file.file_stem().unwrap_or_default().to_string_lossy();
     let mut items = Vec::new();
 
@@ -577,11 +578,11 @@ fn get_unresolved_blocking_items(repo: &Repo, task_file: &Path) -> Vec<String> {
             if p.is_dir() && !is_symlink {
                 let dir_name = p.file_name().unwrap_or_default().to_string_lossy();
                 if !dir_name.starts_with('.') {
-                    let belongs_to_task = dir_name == task_stem
-                        || (parent_dir != repo.did_dir
-                            && !has_sibling_task_file(parent_dir, &dir_name));
-
-                    if belongs_to_task {
+                    if is_root_dir {
+                        if dir_name == task_stem {
+                            collect_unresolved_in_dir(repo, &p, &mut items);
+                        }
+                    } else {
                         collect_unresolved_in_dir(repo, &p, &mut items);
                     }
                 }
@@ -615,26 +616,6 @@ fn collect_unresolved_in_dir(repo: &Repo, dir: &Path, items: &mut Vec<String>) {
 /// Checks if a task file has any unresolved sub-items (deeper subdirectories).
 fn has_unresolved_subitems(repo: &Repo, task_file: &Path) -> bool {
     !get_unresolved_blocking_items(repo, task_file).is_empty()
-}
-
-fn has_sibling_task_file(parent_dir: &Path, dir_name: &str) -> bool {
-    if let Ok(entries) = fs::read_dir(parent_dir) {
-        for entry in entries.flatten() {
-            let p = entry.path();
-            if p.is_file() {
-                let name = p.file_name().unwrap_or_default().to_string_lossy();
-                let clean_name = name.strip_prefix('.').unwrap_or(&name);
-                let stem = Path::new(clean_name)
-                    .file_stem()
-                    .unwrap_or_default()
-                    .to_string_lossy();
-                if stem == dir_name {
-                    return true;
-                }
-            }
-        }
-    }
-    false
 }
 
 fn normalize_path(path: &Path) -> PathBuf {
