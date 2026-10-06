@@ -73,6 +73,7 @@ fn test_add_and_show() {
     let (success_show_dir, _, stderr_show_dir) = did_cmd(root, &["show", "backend"]);
     assert!(!success_show_dir);
     assert!(stderr_show_dir.contains("requires a task file, got directory"));
+    assert!(stderr_show_dir.contains("Use 'did status backend' instead"));
 }
 
 #[test]
@@ -118,16 +119,18 @@ fn test_status_and_hierarchy() {
     did_cmd(root, &["add", "backend/auth/b.md", "-m", "Task B"]);
 
     // Status shows both a.md and b.md as actionable
-    let (success_stat, stdout_stat, _) = did_cmd(root, &["status"]);
+    let (success_stat, stdout_stat, stderr_stat) = did_cmd(root, &["status"]);
     assert!(success_stat);
     assert_eq!(stdout_stat.trim(), "backend/auth/a.md\nbackend/auth/b.md");
+    assert!(stderr_stat.contains("[0 blocked, 0 closed]"));
 
     // Now add a deeper subdirectory backend/auth/sub/c.md
     did_cmd(root, &["add", "backend/auth/sub/c.md", "-m", "Task C"]);
 
     // Now a.md and b.md are blocked by sub/c.md! Actionable is only sub/c.md
-    let (_, stdout_stat2, _) = did_cmd(root, &["status"]);
+    let (_, stdout_stat2, stderr_stat2) = did_cmd(root, &["status"]);
     assert_eq!(stdout_stat2.trim(), "backend/auth/sub/c.md");
+    assert!(stderr_stat2.contains("[2 blocked, 0 closed]"));
 
     // Complete sub/c.md
     let (success_done_c, _, _) = did_cmd(root, &["done", "backend/auth/sub/c.md"]);
@@ -135,8 +138,9 @@ fn test_status_and_hierarchy() {
     assert!(root.join(".did/backend/auth/sub/.c.md").is_file());
 
     // Now a.md and b.md are actionable again!
-    let (_, stdout_stat3, _) = did_cmd(root, &["status"]);
+    let (_, stdout_stat3, stderr_stat3) = did_cmd(root, &["status"]);
     assert_eq!(stdout_stat3.trim(), "backend/auth/a.md\nbackend/auth/b.md");
+    assert!(stderr_stat3.contains("[0 blocked, 1 closed]"));
 
     // Status -a shows resolved task as well
     let (_, stdout_stat_a, _) = did_cmd(root, &["status", "-a"]);

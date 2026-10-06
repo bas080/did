@@ -210,10 +210,15 @@ fn cmd_status(repo: &Repo, raw_path: Option<&Path>, all: bool) -> ExitCode {
     }
 
     let mut results = Vec::new();
+    let mut blocked_count = 0;
+    let mut closed_count = 0;
 
     for entry in WalkDir::new(&root_path)
         .into_iter()
-        .filter_entry(|e| should_visit_entry(e, all))
+        .filter_entry(|e| {
+            let name = e.file_name().to_string_lossy();
+            name != ".hooks" && name != "hooks"
+        })
         .filter_map(|e| e.ok())
     {
         let path = entry.path();
@@ -228,7 +233,17 @@ fn cmd_status(repo: &Repo, raw_path: Option<&Path>, all: bool) -> ExitCode {
             let file_name = path.file_name().unwrap_or_default().to_string_lossy();
             let is_hidden = file_name.starts_with('.');
 
-            if all || (!is_hidden && !has_unresolved_subitems(repo, path)) {
+            if is_hidden {
+                closed_count += 1;
+                if all {
+                    results.push(repo.relative_display_path(path));
+                }
+            } else if has_unresolved_subitems(repo, path) {
+                blocked_count += 1;
+                if all {
+                    results.push(repo.relative_display_path(path));
+                }
+            } else {
                 results.push(repo.relative_display_path(path));
             }
         }
@@ -238,6 +253,8 @@ fn cmd_status(repo: &Repo, raw_path: Option<&Path>, all: bool) -> ExitCode {
     results.dedup();
 
     print_results_with_limit(results, "No actionable tasks found.");
+
+    eprintln!("[{} blocked, {} closed]", blocked_count, closed_count);
 
     ExitCode::SUCCESS
 }
@@ -261,7 +278,10 @@ fn cmd_search(repo: &Repo, query: &str, raw_path: Option<&Path>, all: bool) -> E
 
     for entry in WalkDir::new(&root_path)
         .into_iter()
-        .filter_entry(|e| should_visit_entry(e, all))
+        .filter_entry(|e| {
+            let name = e.file_name().to_string_lossy();
+            name != ".hooks" && name != "hooks"
+        })
         .filter_map(|e| e.ok())
     {
         let path = entry.path();
@@ -411,9 +431,10 @@ fn cmd_show(repo: &Repo, raw_path: &Path, all: bool) -> ExitCode {
     };
 
     if meta.is_dir() {
+        let rel = repo.relative_display_path(&target_path);
         eprintln!(
-            "error: 'did show' requires a task file, got directory: {}",
-            repo.relative_display_path(&target_path)
+            "error: 'did show' requires a task file, got directory: {}. Use 'did status {}' instead.",
+            rel, rel
         );
         return ExitCode::FAILURE;
     }
@@ -589,17 +610,6 @@ fn cmd_autocomplete(shell: &str) -> ExitCode {
 
     generate(parsed_shell, &mut cmd, "did", &mut std::io::stdout());
     ExitCode::SUCCESS
-}
-
-fn should_visit_entry(entry: &walkdir::DirEntry, all: bool) -> bool {
-    if all {
-        return true;
-    }
-    let file_name = entry.file_name().to_string_lossy();
-    if file_name.starts_with('.') && file_name != ".did" {
-        return false;
-    }
-    true
 }
 
 fn print_file_content(repo: &Repo, path: &Path) {
