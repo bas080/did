@@ -419,7 +419,7 @@ fn print_file_content(repo: &Repo, path: &Path) {
     }
 }
 
-/// Checks if a task file has any unresolved sub-items (deeper subdirectories or open symlinks).
+/// Checks if a task file has any unresolved sub-items (deeper subdirectories).
 fn has_unresolved_subitems(repo: &Repo, task_file: &Path) -> bool {
     let parent_dir = match task_file.parent() {
         Some(p) => p,
@@ -447,8 +447,6 @@ fn has_unresolved_subitems(repo: &Repo, task_file: &Path) -> bool {
                         return true;
                     }
                 }
-            } else if is_symlink && symlink_is_unresolved(repo, &p) {
-                return true;
             }
         }
     }
@@ -468,32 +466,6 @@ fn directory_has_unresolved_files(dir: &Path) -> bool {
         }
     }
     false
-}
-
-fn symlink_is_unresolved(_repo: &Repo, symlink_path: &Path) -> bool {
-    let link_target = match fs::read_link(symlink_path) {
-        Ok(t) => t,
-        Err(_) => return true,
-    };
-
-    let abs_target = if link_target.is_relative() {
-        symlink_path.parent().unwrap().join(&link_target)
-    } else {
-        link_target
-    };
-
-    let target_name = abs_target.file_name().unwrap_or_default().to_string_lossy();
-    if target_name.starts_with('.') {
-        return false;
-    }
-
-    // Check if target exists
-    if abs_target.exists() || fs::symlink_metadata(&abs_target).is_ok() {
-        true
-    } else {
-        // Broken symlink is considered unresolved
-        true
-    }
 }
 
 fn normalize_path(path: &Path) -> PathBuf {

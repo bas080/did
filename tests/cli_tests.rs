@@ -126,21 +126,6 @@ fn test_link_and_done_updates_symlink() {
     let symlink_file = root.join(".did/backend/feature.md");
     assert!(symlink_file.is_symlink());
 
-    // backend/server.md is blocked because backend/ has open symlink pointing to feature.md.
-    // Actionable leaves are backend/feature.md and feature.md
-    let (_, stdout_stat, _) = did_cmd(root, &["status"]);
-    assert_eq!(stdout_stat.trim(), "backend/feature.md\nfeature.md");
-
-    // Status specifically for backend subtree:
-    let (_, stdout_stat_backend, _) = did_cmd(root, &["status", "backend"]);
-    assert_eq!(stdout_stat_backend.trim(), "backend/feature.md");
-
-    // Trying to complete server.md fails
-    let (success_done_server, _, stderr_done_server) =
-        did_cmd(root, &["done", "backend/server.md"]);
-    assert!(!success_done_server);
-    assert!(stderr_done_server.contains("unresolved sub-items remain"));
-
     // Complete feature.md
     let (success_done_feat, _, _) = did_cmd(root, &["done", "feature.md"]);
     assert!(success_done_feat);
