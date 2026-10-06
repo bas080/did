@@ -121,6 +121,26 @@ fn test_status_and_hierarchy() {
 }
 
 #[test]
+fn test_status_limit_env() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    did_cmd(root, &["init"]);
+
+    did_cmd(root, &["add", "task1.md", "-m", "Task 1"]);
+    did_cmd(root, &["add", "task2.md", "-m", "Task 2"]);
+    did_cmd(root, &["add", "task3.md", "-m", "Task 3"]);
+
+    let (success, stdout, stderr) =
+        did_cmd_env(root, &["status"], &[("DID_STATUS_LIMIT", "2")]);
+    assert!(success);
+    let lines: Vec<&str> = stdout.trim().lines().collect();
+    assert_eq!(lines.len(), 2);
+    assert!(stderr.contains("status limit reached (2/3 items shown)"));
+    assert!(stderr.contains("Use search or adjust limit"));
+}
+
+#[test]
 fn test_show_and_done_blocked_output() {
     let dir = tempdir().unwrap();
     let root = dir.path();
@@ -229,7 +249,7 @@ fn test_search_feature() {
     assert!(success_lim);
     let lines: Vec<&str> = stdout_lim.trim().lines().collect();
     assert_eq!(lines.len(), 1);
-    assert!(stderr_lim.contains("limit reached"));
+    assert!(stderr_lim.contains("status limit reached"));
 }
 
 #[test]
