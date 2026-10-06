@@ -58,6 +58,12 @@ pub enum Commands {
         path: PathBuf,
     },
 
+    /// Mark a resolved PATH as open/undone (removes leading dot; updates symlinks)
+    Undone {
+        /// Resolved task file path
+        path: PathBuf,
+    },
+
     /// Symlink TARGET into DEST directory using TARGET's basename
     Link {
         /// Target path

@@ -1,0 +1,3 @@
+[REMINDER] If this issue or task was NOT fully completed or if remaining work/bugs were discovered:
+  1. Mark the issue undone: $ did undone <PATH>
+  2. Move it back to refine/ with clarifying questions: $ did mv <PATH> refine/<PATH>

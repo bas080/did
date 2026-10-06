@@ -555,3 +555,77 @@ fn test_executable_hook_failure_fails_show() {
         assert!(!success);
     }
 }
+
+#[test]
+fn test_did_undone_restores_task_and_symlinks() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    did_cmd(root, &["init"]);
+
+    did_cmd(
+        root,
+        &["add", "backend/auth/jwt.md", "-m", "JWT implementation"],
+    );
+    did_cmd(root, &["link", "backend/auth/jwt.md", "frontend"]);
+    did_cmd(root, &["done", "backend/auth/jwt.md"]);
+
+    assert!(root.join(".did/backend/auth/.jwt.md").is_file());
+
+    // Mark undone
+    let (success, _, _) = did_cmd(root, &["undone", "backend/auth/jwt.md"]);
+    assert!(success);
+
+    assert!(root.join(".did/backend/auth/jwt.md").is_file());
+    assert!(!root.join(".did/backend/auth/.jwt.md").exists());
+
+    let symlink_file = root.join(".did/frontend/jwt.md");
+    assert!(symlink_file.is_symlink());
+    let target = fs::read_link(&symlink_file).unwrap();
+    assert_eq!(target, Path::new("../backend/auth/jwt.md"));
+}
+
+#[test]
+fn test_executable_done_hook_abort() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    did_cmd(root, &["init"]);
+
+    did_cmd(root, &["add", "task.md", "-m", "Task content"]);
+
+    let hook = root.join(".did/.hooks/done");
+    fs::create_dir_all(hook.parent().unwrap()).unwrap();
+    fs::write(&hook, "#!/bin/sh\nexit 1\n").unwrap();
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(&hook).unwrap().permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&hook, perms).unwrap();
+
+        let (success, _, _) = did_cmd(root, &["done", "task.md"]);
+        assert!(!success);
+        assert!(root.join(".did/task.md").is_file());
+    }
+}
+
+#[test]
+fn test_non_executable_done_hook_reminds() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    did_cmd(root, &["init"]);
+
+    did_cmd(root, &["add", "task.md", "-m", "Task content"]);
+
+    let hook = root.join(".did/.hooks/done");
+    fs::create_dir_all(hook.parent().unwrap()).unwrap();
+    fs::write(&hook, "REMINDER: Mark undone if incomplete").unwrap();
+
+    let (success, stdout, _) = did_cmd(root, &["done", "task.md"]);
+    assert!(success);
+    assert!(stdout.contains("REMINDER: Mark undone if incomplete"));
+    assert!(root.join(".did/.task.md").is_file());
+}

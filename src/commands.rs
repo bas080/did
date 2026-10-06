@@ -72,6 +72,13 @@ pub fn run(repo_opt: Option<Repo>, command: Commands, global_all: bool) -> ExitC
             };
             cmd_done(&repo, &path)
         }
+        Commands::Undone { path } => {
+            let repo = match require_repo(repo_opt) {
+                Ok(r) => r,
+                Err(code) => return code,
+            };
+            cmd_undone(&repo, &path)
+        }
         Commands::Autocomplete { shell } => cmd_autocomplete(&shell),
     }
 }
@@ -676,12 +683,143 @@ fn cmd_done(repo: &Repo, raw_path: &Path) -> ExitCode {
         return ExitCode::FAILURE;
     }
 
+    // Collect ancestor directories top-down for done hooks
+    let mut ancestor_dirs = Vec::new();
+    let mut curr = target_path.parent();
+    while let Some(dir) = curr {
+        if dir == repo.did_dir {
+            ancestor_dirs.push(dir.to_path_buf());
+            break;
+        }
+        if dir.starts_with(&repo.did_dir) {
+            ancestor_dirs.push(dir.to_path_buf());
+        }
+        curr = dir.parent();
+    }
+    ancestor_dirs.reverse();
+
+    let target_rel = repo.relative_display_path(&target_path);
+
+    for dir in ancestor_dirs {
+        let active_hooks = find_hook_files(&dir, "done");
+
+        for hook_p in active_hooks {
+            if is_executable(&hook_p) {
+                let output = Command::new(&hook_p).arg(&target_rel).output();
+                match output {
+                    Ok(out) => {
+                        let stdout_str = String::from_utf8_lossy(&out.stdout);
+                        if !stdout_str.is_empty() {
+                            if stdout_str.ends_with('\n') {
+                                print!("{}", stdout_str);
+                            } else {
+                                println!("{}", stdout_str);
+                            }
+                        }
+                        let stderr_str = String::from_utf8_lossy(&out.stderr);
+                        if !stderr_str.is_empty() {
+                            eprintln!("{}", stderr_str);
+                        }
+                        if !out.status.success() {
+                            return ExitCode::FAILURE;
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!(
+                            "error executing hook {}: {}",
+                            repo.relative_display_path(&hook_p),
+                            e
+                        );
+                        return ExitCode::FAILURE;
+                    }
+                }
+            } else {
+                print_file_content(repo, &hook_p);
+            }
+        }
+    }
+
     let new_filename = format!(".{}", file_name);
     let parent = target_path.parent().unwrap();
     let new_target_path = parent.join(&new_filename);
 
     if let Err(e) = fs::rename(&target_path, &new_target_path) {
         eprintln!("error marking task done: {}", e);
+        return ExitCode::FAILURE;
+    }
+
+    // Update symlinks pointing to target_path across .did
+    update_symlinks(repo, &target_path, &new_target_path);
+
+    ExitCode::SUCCESS
+}
+
+fn cmd_undone(repo: &Repo, raw_path: &Path) -> ExitCode {
+    let mut target_path = repo.resolve_path(raw_path);
+
+    if !target_path.exists() && fs::symlink_metadata(&target_path).is_err() {
+        if let Some(parent) = target_path.parent() {
+            if let Some(file_name) = target_path.file_name() {
+                let name_str = file_name.to_string_lossy();
+                if !name_str.starts_with('.') {
+                    let dot_path = parent.join(format!(".{}", name_str));
+                    if dot_path.exists() || fs::symlink_metadata(&dot_path).is_ok() {
+                        target_path = dot_path;
+                    }
+                }
+            }
+        }
+    }
+
+    let meta = match fs::symlink_metadata(&target_path) {
+        Ok(m) => m,
+        Err(_) => {
+            eprintln!(
+                "error: path does not exist: {}",
+                repo.relative_display_path(&target_path)
+            );
+            return ExitCode::FAILURE;
+        }
+    };
+
+    if meta.is_dir() {
+        eprintln!(
+            "error: cannot undone a directory: {}",
+            repo.relative_display_path(&target_path)
+        );
+        return ExitCode::FAILURE;
+    }
+
+    let file_name = match target_path.file_name() {
+        Some(name) => name.to_string_lossy(),
+        None => {
+            eprintln!("error: invalid path");
+            return ExitCode::FAILURE;
+        }
+    };
+
+    if !file_name.starts_with('.') {
+        eprintln!(
+            "error: task '{}' is not resolved (does not start with a dot)",
+            repo.relative_display_path(&target_path)
+        );
+        return ExitCode::FAILURE;
+    }
+
+    let new_filename = file_name.strip_prefix('.').unwrap_or(&file_name).to_string();
+    let parent = target_path.parent().unwrap();
+    let new_target_path = parent.join(&new_filename);
+
+    if new_target_path.exists() || fs::symlink_metadata(&new_target_path).is_ok() {
+        eprintln!(
+            "error: target path already exists: {}",
+            repo.relative_display_path(&new_target_path)
+        );
+        return ExitCode::FAILURE;
+    }
+
+    if let Err(e) = fs::rename(&target_path, &new_target_path) {
+        eprintln!("error marking task undone: {}", e);
         return ExitCode::FAILURE;
     }
 
@@ -814,6 +952,10 @@ fn normalize_path(path: &Path) -> PathBuf {
 
 fn update_symlinks(repo: &Repo, old_target: &Path, new_target: &Path) {
     let old_norm = normalize_path(old_target);
+    let is_old_dot = old_target
+        .file_name()
+        .map(|n| n.to_string_lossy().starts_with('.'))
+        .unwrap_or(false);
 
     for entry in WalkDir::new(&repo.did_dir).into_iter().filter_map(|e| e.ok()) {
         let path = entry.path();
@@ -830,10 +972,14 @@ fn update_symlinks(repo: &Repo, old_target: &Path, new_target: &Path) {
                 if norm_target == old_norm {
                     let parent = path.parent().unwrap();
                     let old_sym_name = path.file_name().unwrap().to_string_lossy();
-                    let new_sym_name = if old_sym_name.starts_with('.') {
-                        old_sym_name.to_string()
+                    let new_sym_name = if is_old_dot {
+                        old_sym_name.strip_prefix('.').unwrap_or(&old_sym_name).to_string()
                     } else {
-                        format!(".{}", old_sym_name)
+                        if old_sym_name.starts_with('.') {
+                            old_sym_name.to_string()
+                        } else {
+                            format!(".{}", old_sym_name)
+                        }
                     };
                     let new_sym_path = parent.join(new_sym_name);
 
