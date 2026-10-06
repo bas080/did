@@ -16,13 +16,13 @@
 
 To install the **latest release**:
 ```bash
-curl -sL -o did https://github.com/bas080/did/releases/latest/download/did-linux-x86_64
+curl -sL -o did https://github.com/bas080/did/releases/download/latest/did-linux-x86_64
 chmod +x did
 sudo mv did /usr/local/bin/
 did --help
 ```
 
-To install the **latest development build** (pushed to main branch):
+To install the **latest development build** (pushed to main/master branch):
 ```bash
 curl -sL -o did https://github.com/bas080/did/releases/download/development/did-linux-x86_64
 chmod +x did
