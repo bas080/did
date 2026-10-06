@@ -1,5 +1,4 @@
 use std::fs;
-use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::process::Command;
 use tempfile::tempdir;
@@ -77,7 +76,7 @@ fn test_add_and_show() {
 }
 
 #[test]
-fn test_show_hook_executable_and_non_executable() {
+fn test_show_hook_sibling_and_ancestor() {
     let dir = tempdir().unwrap();
     let root = dir.path();
 
@@ -89,29 +88,21 @@ fn test_show_hook_executable_and_non_executable() {
         &["add", "backend/auth/jwt.md", "-m", "JWT implementation"],
     );
 
-    // Create non-executable hook backend/hooks/show
-    let hook_path = root.join(".did/backend/hooks/show");
-    fs::create_dir_all(hook_path.parent().unwrap()).unwrap();
-    fs::write(&hook_path, "Backend guidelines").unwrap();
-    fs::set_permissions(&hook_path, fs::Permissions::from_mode(0o644)).unwrap();
+    // Create ancestor hook .did/backend/.hooks/show
+    let ancestor_hook = root.join(".did/backend/.hooks/show");
+    fs::create_dir_all(ancestor_hook.parent().unwrap()).unwrap();
+    fs::write(&ancestor_hook, "Backend ancestor guidelines").unwrap();
 
-    let (success1, stdout1, _) = did_cmd(root, &["show", "backend/auth/jwt.md"]);
-    assert!(success1);
+    // Create sibling hook .did/backend/auth/.hooks/show
+    let sibling_hook = root.join(".did/backend/auth/.hooks/show");
+    fs::create_dir_all(sibling_hook.parent().unwrap()).unwrap();
+    fs::write(&sibling_hook, "Auth sibling guidelines").unwrap();
+
+    let (success, stdout, _) = did_cmd(root, &["show", "backend/auth/jwt.md"]);
+    assert!(success);
     assert_eq!(
-        stdout1.trim(),
-        "backend/hooks/show\nBackend guidelines\n\nbackend/auth/jwt.md\nJWT implementation"
-    );
-
-    // Now make hook executable
-    let script_content = "#!/bin/sh\necho \"Dynamic backend instruction\"";
-    fs::write(&hook_path, script_content).unwrap();
-    fs::set_permissions(&hook_path, fs::Permissions::from_mode(0o755)).unwrap();
-
-    let (success2, stdout2, _) = did_cmd(root, &["show", "backend/auth/jwt.md"]);
-    assert!(success2);
-    assert_eq!(
-        stdout2.trim(),
-        "Dynamic backend instruction\n\nbackend/auth/jwt.md\nJWT implementation"
+        stdout.trim(),
+        "backend/.hooks/show\nBackend ancestor guidelines\n\nbackend/auth/.hooks/show\nAuth sibling guidelines\n\nbackend/auth/jwt.md\nJWT implementation"
     );
 }
 

@@ -217,7 +217,7 @@ fn cmd_status(repo: &Repo, raw_path: Option<&Path>, all: bool) -> ExitCode {
         .filter_map(|e| e.ok())
     {
         let path = entry.path();
-        if path == repo.did_dir {
+        if path == repo.did_dir || is_reserved_hook_file(path) {
             continue;
         }
 
@@ -265,7 +265,7 @@ fn cmd_search(repo: &Repo, query: &str, raw_path: Option<&Path>, all: bool) -> E
         .filter_map(|e| e.ok())
     {
         let path = entry.path();
-        if path == repo.did_dir {
+        if path == repo.did_dir || is_reserved_hook_file(path) {
             continue;
         }
 
@@ -380,6 +380,22 @@ fn is_executable(path: &Path) -> bool {
     false
 }
 
+fn is_reserved_hook_file(path: &Path) -> bool {
+    let name = path.file_name().unwrap_or_default().to_string_lossy();
+    if matches!(
+        name.as_ref(),
+        "show" | "status" | "done" | "add" | "link" | "mv"
+    ) {
+        if let Some(parent) = path.parent() {
+            let parent_name = parent.file_name().unwrap_or_default().to_string_lossy();
+            if parent_name == ".hooks" || parent_name == "hooks" {
+                return true;
+            }
+        }
+    }
+    false
+}
+
 fn cmd_show(repo: &Repo, raw_path: &Path, all: bool) -> ExitCode {
     let target_path = repo.resolve_path(raw_path);
 
@@ -432,10 +448,19 @@ fn cmd_show(repo: &Repo, raw_path: &Path, all: bool) -> ExitCode {
     let mut printed_any = false;
 
     for dir in ancestor_dirs {
-        let hook_path = dir.join("hooks").join("show");
-        if hook_path.is_file() {
-            if is_executable(&hook_path) {
-                let output = Command::new(&hook_path).output();
+        let hook_path = dir.join(".hooks").join("show");
+        let legacy_hook_path = dir.join("hooks").join("show");
+        let active_hook = if hook_path.is_file() {
+            Some(hook_path)
+        } else if legacy_hook_path.is_file() {
+            Some(legacy_hook_path)
+        } else {
+            None
+        };
+
+        if let Some(hook_p) = active_hook {
+            if is_executable(&hook_p) {
+                let output = Command::new(&hook_p).output();
                 match output {
                     Ok(out) => {
                         if printed_any {
@@ -459,7 +484,7 @@ fn cmd_show(repo: &Repo, raw_path: &Path, all: bool) -> ExitCode {
                     Err(e) => {
                         eprintln!(
                             "error executing hook {}: {}",
-                            repo.relative_display_path(&hook_path),
+                            repo.relative_display_path(&hook_p),
                             e
                         );
                         return ExitCode::FAILURE;
@@ -469,7 +494,7 @@ fn cmd_show(repo: &Repo, raw_path: &Path, all: bool) -> ExitCode {
                 if printed_any {
                     println!();
                 }
-                print_file_content(repo, &hook_path);
+                print_file_content(repo, &hook_p);
                 printed_any = true;
             }
         }
@@ -614,6 +639,9 @@ fn get_unresolved_blocking_items(repo: &Repo, task_file: &Path) -> Vec<String> {
             let is_symlink = p.is_symlink();
             if p.is_dir() && !is_symlink {
                 let dir_name = p.file_name().unwrap_or_default().to_string_lossy();
+                if dir_name == "hooks" || dir_name == ".hooks" {
+                    continue;
+                }
                 if !dir_name.starts_with('.') {
                     if is_root_dir {
                         if dir_name == task_stem {
@@ -633,8 +661,15 @@ fn get_unresolved_blocking_items(repo: &Repo, task_file: &Path) -> Vec<String> {
 }
 
 fn collect_unresolved_in_dir(repo: &Repo, dir: &Path, items: &mut Vec<String>) {
+    let dir_name = dir.file_name().unwrap_or_default().to_string_lossy();
+    if dir_name == "hooks" || dir_name == ".hooks" {
+        return;
+    }
     for entry in WalkDir::new(dir).into_iter().filter_map(|e| e.ok()) {
         let p = entry.path();
+        if is_reserved_hook_file(p) {
+            continue;
+        }
         let name = p.file_name().unwrap_or_default().to_string_lossy();
         if name.starts_with('.') {
             continue;
