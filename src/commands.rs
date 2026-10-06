@@ -426,7 +426,7 @@ fn has_unresolved_subitems(repo: &Repo, task_file: &Path) -> bool {
         None => return false,
     };
 
-    let is_root_dir = parent_dir == repo.did_dir;
+    let task_stem = task_file.file_stem().unwrap_or_default().to_string_lossy();
 
     if let Ok(entries) = fs::read_dir(parent_dir) {
         for entry in entries.flatten() {
@@ -438,12 +438,13 @@ fn has_unresolved_subitems(repo: &Repo, task_file: &Path) -> bool {
             if p.is_dir() && !is_symlink {
                 let dir_name = p.file_name().unwrap_or_default().to_string_lossy();
                 if !dir_name.starts_with('.') {
-                    if is_root_dir {
-                        let stem = task_file.file_stem().unwrap_or_default().to_string_lossy();
-                        if dir_name == stem && directory_has_unresolved_files(&p) {
-                            return true;
-                        }
-                    } else if directory_has_unresolved_files(&p) {
+                    // Check if dir_name belongs to task_file:
+                    // Matches task_stem OR parent_dir is not root and no sibling task file named dir_name exists
+                    let belongs_to_task = dir_name == task_stem
+                        || (parent_dir != repo.did_dir
+                            && !has_sibling_task_file(parent_dir, &dir_name));
+
+                    if belongs_to_task && directory_has_unresolved_files(&p) {
                         return true;
                     }
                 }
@@ -451,6 +452,21 @@ fn has_unresolved_subitems(repo: &Repo, task_file: &Path) -> bool {
         }
     }
 
+    false
+}
+
+fn has_sibling_task_file(parent_dir: &Path, dir_name: &str) -> bool {
+    if let Ok(entries) = fs::read_dir(parent_dir) {
+        for entry in entries.flatten() {
+            let p = entry.path();
+            if p.is_file() {
+                let stem = p.file_stem().unwrap_or_default().to_string_lossy();
+                if stem == dir_name {
+                    return true;
+                }
+            }
+        }
+    }
     false
 }
 
