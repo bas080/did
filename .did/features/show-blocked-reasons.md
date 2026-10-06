@@ -1,0 +1,1 @@
+When attempting to 'did show' a blocked issue or running 'did status', display reasons why the task is blocked (e.g., unresolved child tasks or open symlink dependencies). Maintain non-zero exit code on failure.
