@@ -7,8 +7,8 @@ Tracks proposed native `did` subcommands that replace raw shell commands like `m
 
 ## Sub-Issues
 
-1. **`mv` / `promote` / `demote`** (`.did/refine/missing-subcommands/mv/issue.md`):
-   - File and folder relocation with symlink target updating and promote/demote shortcuts.
+1. **`mv`** (`.did/refine/missing-subcommands/mv/issue.md`):
+   - File and folder relocation with symlink target updating.
 
 2. **`rm`** (`.did/refine/missing-subcommands/rm/issue.md`):
    - Safe removal of task nodes and checking for active referencing symlinks.
