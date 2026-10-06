@@ -252,11 +252,15 @@ fn cmd_show(repo: &Repo, raw_path: &Path, all: bool) -> ExitCode {
         return ExitCode::FAILURE;
     }
 
-    if !all && has_unresolved_subitems(repo, &target_path) {
+    let blocking = get_unresolved_blocking_items(repo, &target_path);
+    if !all && !blocking.is_empty() {
         eprintln!(
-            "error: task has unresolved sub-items: {}",
+            "error: task '{}' is blocked by unresolved sub-items:",
             repo.relative_display_path(&target_path)
         );
+        for item in blocking {
+            eprintln!("  - {}", item);
+        }
         return ExitCode::FAILURE;
     }
 
@@ -347,11 +351,15 @@ fn cmd_done(repo: &Repo, raw_path: &Path) -> ExitCode {
         return ExitCode::SUCCESS;
     }
 
-    if has_unresolved_subitems(repo, &target_path) {
+    let blocking = get_unresolved_blocking_items(repo, &target_path);
+    if !blocking.is_empty() {
         eprintln!(
-            "error: cannot mark task done: unresolved sub-items remain for {}",
+            "error: cannot mark task '{}' done: unresolved sub-items remain:",
             repo.relative_display_path(&target_path)
         );
+        for item in blocking {
+            eprintln!("  - {}", item);
+        }
         return ExitCode::FAILURE;
     }
 
@@ -419,14 +427,15 @@ fn print_file_content(repo: &Repo, path: &Path) {
     }
 }
 
-/// Checks if a task file has any unresolved sub-items (deeper subdirectories).
-fn has_unresolved_subitems(repo: &Repo, task_file: &Path) -> bool {
+/// Returns a list of unresolved blocking items (relative paths and symlink targets) under child subdirectories of `task_file`.
+fn get_unresolved_blocking_items(repo: &Repo, task_file: &Path) -> Vec<String> {
     let parent_dir = match task_file.parent() {
         Some(p) => p,
-        None => return false,
+        None => return Vec::new(),
     };
 
     let task_stem = task_file.file_stem().unwrap_or_default().to_string_lossy();
+    let mut items = Vec::new();
 
     if let Ok(entries) = fs::read_dir(parent_dir) {
         for entry in entries.flatten() {
@@ -438,21 +447,44 @@ fn has_unresolved_subitems(repo: &Repo, task_file: &Path) -> bool {
             if p.is_dir() && !is_symlink {
                 let dir_name = p.file_name().unwrap_or_default().to_string_lossy();
                 if !dir_name.starts_with('.') {
-                    // Check if dir_name belongs to task_file:
-                    // Matches task_stem OR parent_dir is not root and no sibling task file named dir_name exists
                     let belongs_to_task = dir_name == task_stem
                         || (parent_dir != repo.did_dir
                             && !has_sibling_task_file(parent_dir, &dir_name));
 
-                    if belongs_to_task && directory_has_unresolved_files(&p) {
-                        return true;
+                    if belongs_to_task {
+                        collect_unresolved_in_dir(repo, &p, &mut items);
                     }
                 }
             }
         }
     }
 
-    false
+    items.sort();
+    items.dedup();
+    items
+}
+
+fn collect_unresolved_in_dir(repo: &Repo, dir: &Path, items: &mut Vec<String>) {
+    for entry in WalkDir::new(dir).into_iter().filter_map(|e| e.ok()) {
+        let p = entry.path();
+        let name = p.file_name().unwrap_or_default().to_string_lossy();
+        if name.starts_with('.') {
+            continue;
+        }
+        if p.is_symlink() {
+            let target_str = fs::read_link(p)
+                .map(|t| t.to_string_lossy().to_string())
+                .unwrap_or_default();
+            items.push(format!("{} -> {}", repo.relative_display_path(p), target_str));
+        } else if p.is_file() {
+            items.push(repo.relative_display_path(p));
+        }
+    }
+}
+
+/// Checks if a task file has any unresolved sub-items (deeper subdirectories).
+fn has_unresolved_subitems(repo: &Repo, task_file: &Path) -> bool {
+    !get_unresolved_blocking_items(repo, task_file).is_empty()
 }
 
 fn has_sibling_task_file(parent_dir: &Path, dir_name: &str) -> bool {
@@ -465,20 +497,6 @@ fn has_sibling_task_file(parent_dir: &Path, dir_name: &str) -> bool {
                     return true;
                 }
             }
-        }
-    }
-    false
-}
-
-fn directory_has_unresolved_files(dir: &Path) -> bool {
-    for entry in WalkDir::new(dir).into_iter().filter_map(|e| e.ok()) {
-        let p = entry.path();
-        let name = p.file_name().unwrap_or_default().to_string_lossy();
-        if name.starts_with('.') {
-            continue;
-        }
-        if p.is_file() || p.is_symlink() {
-            return true;
         }
     }
     false

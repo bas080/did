@@ -107,6 +107,29 @@ fn test_status_and_hierarchy() {
 }
 
 #[test]
+fn test_show_and_done_blocked_output() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    did_cmd(root, &["init"]);
+
+    did_cmd(root, &["add", "backend/auth.md", "-m", "Auth task"]);
+    did_cmd(root, &["add", "backend/auth/sub/research.md", "-m", "Research"]);
+
+    // show backend/auth.md fails and lists blocking sub-items in stderr
+    let (success_show, _, stderr_show) = did_cmd(root, &["show", "backend/auth.md"]);
+    assert!(!success_show);
+    assert!(stderr_show.contains("error: task 'backend/auth.md' is blocked by unresolved sub-items:"));
+    assert!(stderr_show.contains("- backend/auth/sub/research.md"));
+
+    // done backend/auth.md fails and lists blocking sub-items in stderr
+    let (success_done, _, stderr_done) = did_cmd(root, &["done", "backend/auth.md"]);
+    assert!(!success_done);
+    assert!(stderr_done.contains("error: cannot mark task 'backend/auth.md' done: unresolved sub-items remain:"));
+    assert!(stderr_done.contains("- backend/auth/sub/research.md"));
+}
+
+#[test]
 fn test_link_and_done_updates_symlink() {
     let dir = tempdir().unwrap();
     let root = dir.path();
