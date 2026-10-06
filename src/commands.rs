@@ -373,7 +373,7 @@ fn print_results_with_limit(results: Vec<String>, empty_msg: &str) {
     if let Some(l) = limit {
         if l < total {
             eprintln!(
-                "Notice: status limit reached ({}/{} items shown). Use search or adjust limit.",
+                "Notice: status limit reached ({}/{} items shown). Use status on a specific directory, search, or adjust limit.",
                 l, total
             );
         }

@@ -187,7 +187,7 @@ fn test_status_limit_env() {
     let lines: Vec<&str> = stdout.trim().lines().collect();
     assert_eq!(lines.len(), 2);
     assert!(stderr.contains("status limit reached (2/3 items shown)"));
-    assert!(stderr.contains("Use search or adjust limit"));
+    assert!(stderr.contains("Use status on a specific directory, search, or adjust limit"));
 }
 
 #[test]
