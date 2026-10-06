@@ -1,3 +1,5 @@
+#![allow(clippy::collapsible_if)]
+
 use crate::cli::Commands;
 use crate::repo::Repo;
 use std::env;
@@ -87,11 +89,11 @@ fn cmd_add(repo: &Repo, raw_path: &Path, message: Option<String>) -> ExitCode {
         return ExitCode::FAILURE;
     }
 
-    if let Some(parent) = target_path.parent()
-        && let Err(e) = fs::create_dir_all(parent)
-    {
-        eprintln!("error creating directories: {}", e);
-        return ExitCode::FAILURE;
+    if let Some(parent) = target_path.parent() {
+        if let Err(e) = fs::create_dir_all(parent) {
+            eprintln!("error creating directories: {}", e);
+            return ExitCode::FAILURE;
+        }
     }
 
     if let Some(msg) = message {
@@ -217,8 +219,12 @@ fn cmd_status(repo: &Repo, raw_path: Option<&Path>, all: bool) -> ExitCode {
     results.sort();
     results.dedup();
 
-    for res in results {
-        println!("{}", res);
+    if results.is_empty() {
+        eprintln!("No actionable tasks found.");
+    } else {
+        for res in results {
+            println!("{}", res);
+        }
     }
 
     ExitCode::SUCCESS
@@ -509,32 +515,32 @@ fn update_symlinks(repo: &Repo, old_target: &Path, new_target: &Path) {
 
     for entry in WalkDir::new(&repo.did_dir).into_iter().filter_map(|e| e.ok()) {
         let path = entry.path();
-        if path.is_symlink()
-            && let Ok(target) = fs::read_link(path)
-        {
-            let abs_target = if target.is_relative() {
-                path.parent().unwrap().join(&target)
-            } else {
-                target.clone()
-            };
-
-            let norm_target = normalize_path(&abs_target);
-
-            if norm_target == old_norm {
-                let parent = path.parent().unwrap();
-                let old_sym_name = path.file_name().unwrap().to_string_lossy();
-                let new_sym_name = if old_sym_name.starts_with('.') {
-                    old_sym_name.to_string()
+        if path.is_symlink() {
+            if let Ok(target) = fs::read_link(path) {
+                let abs_target = if target.is_relative() {
+                    path.parent().unwrap().join(&target)
                 } else {
-                    format!(".{}", old_sym_name)
+                    target.clone()
                 };
-                let new_sym_path = parent.join(new_sym_name);
 
-                let new_rel_target = compute_relative_path(parent, new_target)
-                    .unwrap_or_else(|| new_target.to_path_buf());
+                let norm_target = normalize_path(&abs_target);
 
-                let _ = fs::remove_file(path);
-                let _ = symlink(&new_rel_target, &new_sym_path);
+                if norm_target == old_norm {
+                    let parent = path.parent().unwrap();
+                    let old_sym_name = path.file_name().unwrap().to_string_lossy();
+                    let new_sym_name = if old_sym_name.starts_with('.') {
+                        old_sym_name.to_string()
+                    } else {
+                        format!(".{}", old_sym_name)
+                    };
+                    let new_sym_path = parent.join(new_sym_name);
+
+                    let new_rel_target = compute_relative_path(parent, new_target)
+                        .unwrap_or_else(|| new_target.to_path_buf());
+
+                    let _ = fs::remove_file(path);
+                    let _ = symlink(&new_rel_target, &new_sym_path);
+                }
             }
         }
     }
