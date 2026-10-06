@@ -1,9 +1,9 @@
 Feature Specification: Display Blocking Reasons on 'show' and 'done'
 
 ## Overview
-When tasks are blocked by unresolved dependencies (unresolved child tasks in deeper subdirectories or open symlinks), users need clear diagnostic feedback explaining exactly why a task cannot be viewed (`did show`) or marked done (`did done`).
+When tasks are blocked by unresolved dependencies (unresolved child tasks in deeper subdirectories or open symlinks inside subdirectories), users need clear diagnostic feedback explaining exactly why a task cannot be viewed (`did show`) or marked done (`did done`).
 
-Note: Direct sibling task files in the same directory are independent leaf nodes and do NOT block each other. A task is blocked only by unresolved items in child subdirectories below it or by open symlinks.
+Note: Direct sibling task files or symlinks directly in the same directory are independent leaf nodes and do NOT block each other. A task is blocked only by unresolved files or open symlinks located inside child subdirectories below its containing folder.
 
 For `did status`, it simply prints actionable open tasks (or all tasks with `-a`). If no open tasks are found under `status`, it prints an informative message to stderr and exits with code 0.
 
@@ -16,7 +16,7 @@ When `did show` is called on a task file that has open/unresolved sub-items (and
   ```
   error: task 'backend/auth/jwt.md' is blocked by unresolved sub-items:
     - backend/auth/sub/research.md (unresolved task in child directory)
-    - backend/auth/dep.md -> ../specs/jwt.md (open symlink dependency)
+    - backend/auth/sub/dep.md -> ../../specs/jwt.md (open symlink dependency in child directory)
   ```
 
 ### 2. `did done <PATH>`
