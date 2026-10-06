@@ -16,6 +16,20 @@ fn did_cmd(dir: &Path, args: &[&str]) -> (bool, String, String) {
     (output.status.success(), stdout, stderr)
 }
 
+fn did_cmd_env(dir: &Path, args: &[&str], envs: &[(&str, &str)]) -> (bool, String, String) {
+    let bin_path = env!("CARGO_BIN_EXE_did");
+    let mut cmd = Command::new(bin_path);
+    cmd.current_dir(dir).args(args);
+    for (k, v) in envs {
+        cmd.env(k, v);
+    }
+    let output = cmd.output().expect("Failed to execute did binary");
+
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    (output.status.success(), stdout, stderr)
+}
+
 #[test]
 fn test_init() {
     let dir = tempdir().unwrap();
@@ -168,6 +182,54 @@ fn test_link_and_done_updates_symlink() {
     let (success_done_server2, _, _) = did_cmd(root, &["done", "backend/server.md"]);
     assert!(success_done_server2);
     assert!(root.join(".did/backend/.server.md").is_file());
+}
+
+#[test]
+fn test_search_feature() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    did_cmd(root, &["init"]);
+
+    did_cmd(root, &["add", "backend/auth/jwt.md", "-m", "Token verification"]);
+    did_cmd(root, &["add", "frontend/login.md", "-m", "Calls JWT auth endpoint"]);
+    did_cmd(root, &["add", "docs/notes.md", "-m", "General documentation"]);
+
+    // Search "jwt" matches backend/auth/jwt.md (path) and frontend/login.md (content)
+    let (success1, stdout1, _) = did_cmd(root, &["search", "jwt"]);
+    assert!(success1);
+    assert_eq!(stdout1.trim(), "backend/auth/jwt.md\nfrontend/login.md");
+
+    // Case-insensitive search "TOKEN"
+    let (success2, stdout2, _) = did_cmd(root, &["search", "TOKEN"]);
+    assert!(success2);
+    assert_eq!(stdout2.trim(), "backend/auth/jwt.md");
+
+    // Search with subtree path argument
+    let (success3, stdout3, _) = did_cmd(root, &["search", "jwt", "frontend"]);
+    assert!(success3);
+    assert_eq!(stdout3.trim(), "frontend/login.md");
+
+    // Search with -a flag and blocked items
+    did_cmd(root, &["add", "backend/auth/jwt/subtask.md", "-m", "JWT helper task"]);
+    // backend/auth/jwt.md is now blocked by jwt/subtask.md
+    let (_, stdout_no_a, stderr_no_a) = did_cmd(root, &["search", "TOKEN"]);
+    assert_eq!(stdout_no_a.trim(), "");
+    assert!(stderr_no_a.contains("No matching tasks found."));
+
+    let (_, stdout_with_a, _) = did_cmd(root, &["search", "TOKEN", "-a"]);
+    assert!(stdout_with_a.contains("backend/auth/jwt.md"));
+
+    // Status limit via env var DID_STATUS_LIMIT
+    let (success_lim, stdout_lim, stderr_lim) = did_cmd_env(
+        root,
+        &["search", "jwt", "-a"],
+        &[("DID_STATUS_LIMIT", "1")],
+    );
+    assert!(success_lim);
+    let lines: Vec<&str> = stdout_lim.trim().lines().collect();
+    assert_eq!(lines.len(), 1);
+    assert!(stderr_lim.contains("limit reached"));
 }
 
 #[test]

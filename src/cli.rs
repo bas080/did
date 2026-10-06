@@ -37,6 +37,15 @@ pub enum Commands {
         path: Option<PathBuf>,
     },
 
+    /// Search task paths and task file contents for QUERY
+    Search {
+        /// Search query string
+        query: String,
+
+        /// Optional subtree path
+        path: Option<PathBuf>,
+    },
+
     /// Print task contents at PATH (requires sub-items done unless -a)
     Show {
         /// Task file path

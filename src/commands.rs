@@ -33,6 +33,13 @@ pub fn run(repo_opt: Option<Repo>, command: Commands, global_all: bool) -> ExitC
             };
             cmd_status(&repo, path.as_deref(), global_all)
         }
+        Commands::Search { query, path } => {
+            let repo = match require_repo(repo_opt) {
+                Ok(r) => r,
+                Err(code) => return code,
+            };
+            cmd_search(&repo, &query, path.as_deref(), global_all)
+        }
         Commands::Show { path } => {
             let repo = match require_repo(repo_opt) {
                 Ok(r) => r,
@@ -219,15 +226,127 @@ fn cmd_status(repo: &Repo, raw_path: Option<&Path>, all: bool) -> ExitCode {
     results.sort();
     results.dedup();
 
-    if results.is_empty() {
-        eprintln!("No actionable tasks found.");
-    } else {
-        for res in results {
-            println!("{}", res);
+    print_results_with_limit(results, "No actionable tasks found.");
+
+    ExitCode::SUCCESS
+}
+
+fn cmd_search(repo: &Repo, query: &str, raw_path: Option<&Path>, all: bool) -> ExitCode {
+    let root_path = match raw_path {
+        Some(p) => repo.resolve_path(p),
+        None => repo.did_dir.clone(),
+    };
+
+    if !root_path.exists() {
+        eprintln!(
+            "error: path does not exist: {}",
+            repo.relative_display_path(&root_path)
+        );
+        return ExitCode::FAILURE;
+    }
+
+    let query_lower = query.to_lowercase();
+    let mut results = Vec::new();
+
+    for entry in WalkDir::new(&root_path)
+        .into_iter()
+        .filter_entry(|e| should_visit_entry(e, all))
+        .filter_map(|e| e.ok())
+    {
+        let path = entry.path();
+        if path == repo.did_dir {
+            continue;
+        }
+
+        let is_symlink = entry.path_is_symlink();
+        let is_file = path.is_file();
+
+        if is_file || is_symlink {
+            let file_name = path.file_name().unwrap_or_default().to_string_lossy();
+            let is_hidden = file_name.starts_with('.');
+
+            let should_include = if all {
+                true
+            } else {
+                !is_hidden && !has_unresolved_subitems(repo, path)
+            };
+
+            if should_include {
+                let rel_display = repo.relative_display_path(path);
+                let matches_path = rel_display.to_lowercase().contains(&query_lower);
+                let matches_content = if is_file {
+                    fs::read_to_string(path)
+                        .ok()
+                        .map(|c| c.to_lowercase().contains(&query_lower))
+                        .unwrap_or(false)
+                } else {
+                    false
+                };
+
+                if matches_path || matches_content {
+                    results.push(rel_display);
+                }
+            }
         }
     }
 
+    results.sort();
+    results.dedup();
+
+    print_results_with_limit(results, "No matching tasks found.");
+
     ExitCode::SUCCESS
+}
+
+fn get_status_limit() -> Option<usize> {
+    if let Ok(val) = env::var("DID_STATUS_LIMIT") {
+        if let Ok(limit) = val.parse::<usize>() {
+            return Some(limit);
+        }
+    }
+    if let Ok(val) = env::var("DID_LIMIT") {
+        if let Ok(limit) = val.parse::<usize>() {
+            return Some(limit);
+        }
+    }
+    for (key, val) in env::vars() {
+        if key.starts_with("DID_STATUS_") || key.starts_with("DID_LIMIT") {
+            if let Ok(limit) = val.parse::<usize>() {
+                return Some(limit);
+            }
+        }
+    }
+    None
+}
+
+fn print_results_with_limit(results: Vec<String>, empty_msg: &str) {
+    if results.is_empty() {
+        if !empty_msg.is_empty() {
+            eprintln!("{}", empty_msg);
+        }
+        return;
+    }
+
+    let limit = get_status_limit();
+    let total = results.len();
+
+    let display_count = match limit {
+        Some(l) if l < total => l,
+        _ => total,
+    };
+
+    for res in &results[..display_count] {
+        println!("{}", res);
+    }
+
+    if let Some(l) = limit {
+        if l < total {
+            eprintln!(
+                "Notice: status limit reached ({}/{} items shown). Use search or adjust limit.",
+                l, total
+            );
+        }
+    }
 }
 
 fn cmd_show(repo: &Repo, raw_path: &Path, all: bool) -> ExitCode {
