@@ -1,22 +1,22 @@
-# Feature Specification: Execution Logging (`.did.log`) for AI Telemetry
+# Feature Specification: Execution Logging (`DID_LOG_PATH`) for AI Telemetry
 
 ## Overview
-Sub-issue of `ai-effectiveness-metrics`. Implements opt-in execution logging to track CLI command invocations, stdout/stderr outputs, and exit status codes in `.did.log`. This telemetry provides an audit log for evaluating AI agent effectiveness and tool usage patterns.
+Sub-issue of `ai-effectiveness-metrics`. Implements opt-in execution logging to track CLI command invocations, stdout/stderr outputs, and exit status codes. Telemetry logging is activated by setting the `DID_LOG_PATH` environment variable.
 
 ---
 
 ## Detailed Requirements
 
-### 1. Opt-In Environment Variable (`DID_LOG`)
+### 1. Activation via Environment Variable (`DID_LOG_PATH`)
 - Execution logging is **DISABLED BY DEFAULT**.
-- Logging is enabled **ONLY** when the `DID_LOG=1` or `DID_LOG=true` environment variable is present in the execution environment.
-- If a custom path is provided in `DID_LOG_PATH`, log to that path; otherwise default to `.did.log` in the workspace root.
+- Logging is enabled **ONLY** when the `DID_LOG_PATH` environment variable is defined and non-empty.
 
-### 2. Log File Location
-- Default log file path: `.did.log` located at the root of the project workspace (alongside `.did/`).
+### 2. Log File Path Resolution
+- **Relative Paths**: If `DID_LOG_PATH` is a relative path (e.g., `DID_LOG_PATH=.did.log` or `DID_LOG_PATH=logs/exec.log`), it is automatically resolved relative to the `.did/` state directory root.
+- **Absolute Paths**: If `DID_LOG_PATH` is an absolute path (e.g., `/tmp/did.log`), it is used directly.
 
 ### 3. Log Entry Structure
-Each command invocation appends a structured entry to `.did.log`:
+Each command invocation appends a structured entry to the target log file:
 
 ```
 === [TIMESTAMP_ISO8601] COMMAND: did <ARGS...> ===
@@ -30,18 +30,18 @@ EXIT CODE: <EXIT_CODE>
 ```
 
 ### 4. Non-Blocking Execution
-- Failure to open or append to `.did.log` (e.g. read-only filesystem) must print a warning to `stderr` but **MUST NOT** interrupt or fail the primary `did` command execution.
+- Failure to open or append to `DID_LOG_PATH` (e.g. read-only filesystem or missing directory) must print a warning to `stderr` but **MUST NOT** interrupt or fail the primary `did` command execution.
 
 ---
 
 ## Concrete Integration Test Requirements (`tests/cli_tests.rs`)
 
-1. **`test_execution_logging_enabled`**:
-   - Set `DID_LOG=1`.
+1. **`test_execution_logging_enabled_via_did_log_path`**:
+   - Set `DID_LOG_PATH=.did.log`.
    - Run `did status`.
-   - Assert `.did.log` exists in workspace root.
-   - Assert `.did.log` contains `COMMAND: did status`, `EXIT CODE: 0`, and stdout/stderr output sections.
+   - Assert `.did/.did.log` exists.
+   - Assert log contains `COMMAND: did status`, `EXIT CODE: 0`, and stdout/stderr output sections.
 
 2. **`test_execution_logging_disabled_by_default`**:
-   - Run `did status` without `DID_LOG` set.
-   - Assert `.did.log` is NOT created.
+   - Run `did status` without `DID_LOG_PATH` set.
+   - Assert `.did/.did.log` is NOT created.
