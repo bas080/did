@@ -37,6 +37,13 @@ pub fn run(repo_opt: Option<Repo>, command: Commands, global_all: bool) -> ExitC
             };
             cmd_link(&repo, &target, &dest)
         }
+        Commands::Mv { old_path, new_path } => {
+            let repo = match require_repo(repo_opt) {
+                Ok(r) => r,
+                Err(code) => return code,
+            };
+            cmd_mv(&repo, &old_path, &new_path)
+        }
         Commands::Status { path } => {
             let repo = match require_repo(repo_opt) {
                 Ok(r) => r,
@@ -193,6 +200,79 @@ fn cmd_link(repo: &Repo, target_raw: &Path, dest_raw: &Path) -> ExitCode {
     }
 
     ExitCode::SUCCESS
+}
+
+fn cmd_mv(repo: &Repo, old_raw: &Path, new_raw: &Path) -> ExitCode {
+    let old_path = repo.resolve_path(old_raw);
+    let new_path = repo.resolve_path(new_raw);
+
+    if !old_path.exists() && fs::symlink_metadata(&old_path).is_err() {
+        eprintln!(
+            "error: path does not exist: {}",
+            repo.relative_display_path(&old_path)
+        );
+        return ExitCode::FAILURE;
+    }
+
+    if new_path.exists() || fs::symlink_metadata(&new_path).is_ok() {
+        eprintln!(
+            "error: destination path already exists: {}",
+            repo.relative_display_path(&new_path)
+        );
+        return ExitCode::FAILURE;
+    }
+
+    if let Some(parent) = new_path.parent() {
+        if let Err(e) = fs::create_dir_all(parent) {
+            eprintln!("error creating directories: {}", e);
+            return ExitCode::FAILURE;
+        }
+    }
+
+    if let Err(e) = fs::rename(&old_path, &new_path) {
+        eprintln!("error moving path: {}", e);
+        return ExitCode::FAILURE;
+    }
+
+    update_symlinks_for_mv(repo, &old_path, &new_path);
+
+    ExitCode::SUCCESS
+}
+
+fn update_symlinks_for_mv(repo: &Repo, old_path: &Path, new_path: &Path) {
+    let old_norm = normalize_path(old_path);
+    let new_norm = normalize_path(new_path);
+
+    for entry in WalkDir::new(&repo.did_dir).into_iter().filter_map(|e| e.ok()) {
+        let sym_path = entry.path();
+        if sym_path.is_symlink() {
+            if let Ok(target) = fs::read_link(sym_path) {
+                let parent = sym_path.parent().unwrap();
+                let abs_target = if target.is_relative() {
+                    parent.join(&target)
+                } else {
+                    target.clone()
+                };
+
+                let norm_target = normalize_path(&abs_target);
+
+                if norm_target == old_norm || norm_target.starts_with(&old_norm) {
+                    let sub_rel = norm_target.strip_prefix(&old_norm).unwrap_or(Path::new(""));
+                    let new_abs_target = new_norm.join(sub_rel);
+
+                    if let Some(new_rel_target) = compute_relative_path(parent, &new_abs_target) {
+                        let _ = fs::remove_file(sym_path);
+                        let _ = symlink(&new_rel_target, sym_path);
+                    }
+                } else if sym_path.starts_with(&new_norm) {
+                    if let Some(new_rel_target) = compute_relative_path(parent, &norm_target) {
+                        let _ = fs::remove_file(sym_path);
+                        let _ = symlink(&new_rel_target, sym_path);
+                    }
+                }
+            }
+        }
+    }
 }
 
 fn is_ignored_directory(name: &str) -> bool {

@@ -354,3 +354,203 @@ fn test_execution_logging_xml() {
     assert!(content.contains("<args>"));
     assert!(content.contains("</invocation>"));
 }
+
+#[test]
+fn test_did_mv_single_file_updates_inbound_symlinks() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    did_cmd(root, &["init"]);
+
+    did_cmd(
+        root,
+        &["add", "backend/auth/jwt.md", "-m", "JWT implementation"],
+    );
+    did_cmd(root, &["link", "backend/auth/jwt.md", "frontend"]);
+
+    let (success, _, _) = did_cmd(
+        root,
+        &["mv", "backend/auth/jwt.md", "backend/auth/token.md"],
+    );
+    assert!(success);
+
+    assert!(!root.join(".did/backend/auth/jwt.md").exists());
+    assert!(root.join(".did/backend/auth/token.md").is_file());
+
+    let symlink_file = root.join(".did/frontend/jwt.md");
+    assert!(symlink_file.is_symlink());
+    let target = fs::read_link(&symlink_file).unwrap();
+    assert_eq!(target, Path::new("../backend/auth/token.md"));
+}
+
+#[test]
+fn test_did_mv_directory_updates_inbound_and_outbound_symlinks() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    did_cmd(root, &["init"]);
+
+    did_cmd(root, &["add", "docs/spec.md", "-m", "Doc spec"]);
+    did_cmd(
+        root,
+        &["add", "backend/auth/jwt.md", "-m", "JWT implementation"],
+    );
+
+    did_cmd(root, &["link", "docs/spec.md", "backend/auth"]);
+    did_cmd(root, &["link", "backend/auth/jwt.md", "frontend"]);
+
+    let (success, _, _) = did_cmd(root, &["mv", "backend/auth", "backend/security"]);
+    assert!(success);
+
+    assert!(!root.join(".did/backend/auth").exists());
+    assert!(root.join(".did/backend/security/jwt.md").is_file());
+
+    let inbound_symlink = root.join(".did/frontend/jwt.md");
+    assert!(inbound_symlink.is_symlink());
+    let inbound_target = fs::read_link(&inbound_symlink).unwrap();
+    assert_eq!(inbound_target, Path::new("../backend/security/jwt.md"));
+
+    let outbound_symlink = root.join(".did/backend/security/spec.md");
+    assert!(outbound_symlink.is_symlink());
+    let outbound_target = fs::read_link(&outbound_symlink).unwrap();
+    assert_eq!(outbound_target, Path::new("../../docs/spec.md"));
+}
+
+#[test]
+fn test_did_mv_destination_collision_fails() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    did_cmd(root, &["init"]);
+
+    did_cmd(root, &["add", "a.md", "-m", "Task A"]);
+    did_cmd(root, &["add", "b.md", "-m", "Task B"]);
+
+    let (success, _, stderr) = did_cmd(root, &["mv", "a.md", "b.md"]);
+    assert!(!success);
+    assert!(stderr.contains("destination path already exists"));
+}
+
+#[test]
+fn test_did_mv_auto_creates_parent_directories() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    did_cmd(root, &["init"]);
+
+    did_cmd(root, &["add", "a.md", "-m", "Task A"]);
+
+    let (success, _, _) = did_cmd(root, &["mv", "a.md", "nested/deep/folder/a.md"]);
+    assert!(success);
+
+    assert!(root.join(".did/nested/deep/folder/a.md").is_file());
+}
+
+#[test]
+fn test_did_mv_resolved_dot_files() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    did_cmd(root, &["init"]);
+
+    did_cmd(
+        root,
+        &["add", "backend/auth/jwt.md", "-m", "JWT implementation"],
+    );
+    did_cmd(root, &["link", "backend/auth/jwt.md", "frontend"]);
+    did_cmd(root, &["done", "backend/auth/jwt.md"]);
+
+    let (success, _, _) = did_cmd(
+        root,
+        &["mv", "backend/auth/.jwt.md", "backend/auth/.token.md"],
+    );
+    assert!(success);
+
+    assert!(root.join(".did/backend/auth/.token.md").is_file());
+    let symlink_file = root.join(".did/frontend/.jwt.md");
+    assert!(symlink_file.is_symlink());
+    let target = fs::read_link(&symlink_file).unwrap();
+    assert_eq!(target, Path::new("../backend/auth/.token.md"));
+}
+
+#[test]
+fn test_did_mv_non_existent_source_fails() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    did_cmd(root, &["init"]);
+
+    let (success, _, stderr) = did_cmd(root, &["mv", "non_existent.md", "target.md"]);
+    assert!(!success);
+    assert!(stderr.contains("path does not exist"));
+}
+
+#[test]
+fn test_bare_invocation_welcome() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    let (success, stdout, _) = did_cmd(root, &[]);
+    assert!(success);
+    assert!(stdout.contains("did - file-system-native issue and dependency tracker"));
+    assert!(stdout.contains("USAGE GUIDANCE & AI AGENT WORKFLOW"));
+}
+
+#[test]
+fn test_editor_failure_fails_add() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    did_cmd(root, &["init"]);
+
+    let (success, _, stderr) = did_cmd_env(root, &["add", "failing_task.md"], &[("EDITOR", "false")]);
+    assert!(!success);
+    assert!(stderr.contains("editor 'false' failed"));
+}
+
+#[test]
+fn test_link_non_existent_target_fails() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    did_cmd(root, &["init"]);
+
+    let (success, _, stderr) = did_cmd(root, &["link", "non_existent.md", "dest_dir"]);
+    assert!(!success);
+    assert!(stderr.contains("target does not exist"));
+}
+
+#[test]
+fn test_autocomplete_unsupported_shell_fails() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    let (success, _, stderr) = did_cmd(root, &["autocomplete", "invalid_shell"]);
+    assert!(!success);
+    assert!(stderr.contains("unsupported shell"));
+}
+
+#[test]
+fn test_executable_hook_failure_fails_show() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    did_cmd(root, &["init"]);
+
+    did_cmd(root, &["add", "task.md", "-m", "Task content"]);
+
+    let hook = root.join(".did/.hooks/show");
+    fs::create_dir_all(hook.parent().unwrap()).unwrap();
+    fs::write(&hook, "#!/bin/sh\nexit 1\n").unwrap();
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(&hook).unwrap().permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&hook, perms).unwrap();
+
+        let (success, _, _) = did_cmd(root, &["show", "task.md"]);
+        assert!(!success);
+    }
+}

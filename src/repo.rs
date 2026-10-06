@@ -108,4 +108,17 @@ mod tests {
         let rel_display = repo.relative_display_path(&path1);
         assert_eq!(rel_display, "backend/auth/jwt.md");
     }
+
+    #[test]
+    fn test_resolve_and_display_external_path() {
+        let dir = tempdir().unwrap();
+        let repo = Repo::init(dir.path()).unwrap();
+
+        let external_path = Path::new("/some/external/file.txt");
+        let resolved = repo.resolve_path(external_path);
+        assert!(resolved.starts_with(&repo.did_dir));
+
+        let display = repo.relative_display_path(external_path);
+        assert_eq!(display, external_path.to_string_lossy());
+    }
 }

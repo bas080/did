@@ -66,6 +66,14 @@ pub enum Commands {
         dest: PathBuf,
     },
 
+    /// Move or rename a task file or directory at OLD_PATH to NEW_PATH
+    Mv {
+        /// Source task path
+        old_path: PathBuf,
+        /// Target task path
+        new_path: PathBuf,
+    },
+
     /// Generate shell completion scripts (e.g., bash)
     Autocomplete {
         /// Shell name (e.g., bash)

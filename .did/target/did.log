@@ -14,3 +14,59 @@
     <arg>implement</arg>
   </args>
 </invocation>
+<invocation timestamp="1791293018" exit_code="0">
+  <command>Status { path: Some(&quot;implement&quot;) }</command>
+  <args>
+    <arg>./target/debug/did</arg>
+    <arg>status</arg>
+    <arg>implement</arg>
+  </args>
+</invocation>
+<invocation timestamp="1791293039" exit_code="0">
+  <command>Show { path: &quot;implement/did-mv/issue.md&quot; }</command>
+  <args>
+    <arg>./target/debug/did</arg>
+    <arg>show</arg>
+    <arg>implement/did-mv/issue.md</arg>
+  </args>
+</invocation>
+<invocation timestamp="1791293146" exit_code="0">
+  <command>Status { path: Some(&quot;implement&quot;) }</command>
+  <args>
+    <arg>./target/debug/did</arg>
+    <arg>status</arg>
+    <arg>implement</arg>
+  </args>
+</invocation>
+<invocation timestamp="1791293167" exit_code="0">
+  <command>Show { path: &quot;implement/increase-code-coverage/commands-rs/issue.md&quot; }</command>
+  <args>
+    <arg>./target/debug/did</arg>
+    <arg>show</arg>
+    <arg>implement/increase-code-coverage/commands-rs/issue.md</arg>
+  </args>
+</invocation>
+<invocation timestamp="1791293189" exit_code="0">
+  <command>Show { path: &quot;implement/increase-code-coverage/main-rs/issue.md&quot; }</command>
+  <args>
+    <arg>./target/debug/did</arg>
+    <arg>show</arg>
+    <arg>implement/increase-code-coverage/main-rs/issue.md</arg>
+  </args>
+</invocation>
+<invocation timestamp="1791293189" exit_code="0">
+  <command>Show { path: &quot;implement/increase-code-coverage/repo-rs/issue.md&quot; }</command>
+  <args>
+    <arg>./target/debug/did</arg>
+    <arg>show</arg>
+    <arg>implement/increase-code-coverage/repo-rs/issue.md</arg>
+  </args>
+</invocation>
+<invocation timestamp="1791293333" exit_code="0">
+  <command>Status { path: Some(&quot;implement&quot;) }</command>
+  <args>
+    <arg>./target/debug/did</arg>
+    <arg>status</arg>
+    <arg>implement</arg>
+  </args>
+</invocation>
