@@ -12,6 +12,17 @@
 
 ## Installation
 
+### Direct Binary Download (Linux x86_64)
+
+```bash
+curl -sL -o did https://github.com/your-org/did/releases/latest/download/did-linux-x86_64
+chmod +x did
+sudo mv did /usr/local/bin/
+did --help
+```
+
+### Build from Source (Cargo)
+
 Ensure you have Rust installed (1.80+), then build with Cargo:
 
 ```bash
@@ -67,6 +78,14 @@ Prefixes the filename with a dot (`.jwt.md`), hiding it in filesystem listings a
 ```bash
 source <(did autocomplete bash)
 ```
+
+## Environment Variables
+
+| Variable | Description |
+| :--- | :--- |
+| `DID_STATUS_LIMIT` / `DID_LIMIT` | Sets the maximum number of items returned by `did status` or `did search` before displaying a truncation notice on `stderr`. |
+| `DID_LOG_PATH` | Activates XML execution telemetry logging. Relative paths are resolved relative to the `.did/` state directory root. |
+| `EDITOR` | Specifies the text editor to invoke when running `did add PATH` without a `-m` message flag (defaults to `vi`). |
 
 ## Workflows & Prioritization
 
