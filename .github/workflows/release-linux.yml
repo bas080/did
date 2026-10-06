@@ -2,6 +2,9 @@ name: Release Linux Binary
 
 on:
   push:
+    branches:
+      - main
+      - master
     tags:
       - 'v*'
   workflow_dispatch:
@@ -10,6 +13,8 @@ jobs:
   release-linux:
     name: Build & Upload Linux Binary
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -25,7 +30,16 @@ jobs:
         with:
           name: did-linux-x86_64
           path: did-linux-x86_64
-      - name: Upload to GitHub Release
+      - name: Publish Latest Release Asset
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: "Latest Development Build"
+          body: "Automated latest release built from latest commit on main branch."
+          prerelease: true
+          files: did-linux-x86_64
+      - name: Publish Version Tag Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
