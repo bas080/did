@@ -125,6 +125,66 @@ fn cmd_add(repo: &Repo, raw_path: &Path, message: Option<String>) -> ExitCode {
         }
     }
 
+    // Collect ancestor directories top-down for add hooks
+    let mut ancestor_dirs = Vec::new();
+    let mut curr = target_path.parent();
+    while let Some(dir) = curr {
+        if dir == repo.did_dir {
+            ancestor_dirs.push(dir.to_path_buf());
+            break;
+        }
+        if dir.starts_with(&repo.did_dir) {
+            ancestor_dirs.push(dir.to_path_buf());
+        }
+        curr = dir.parent();
+    }
+    ancestor_dirs.reverse();
+
+    let target_rel = repo.relative_display_path(&target_path);
+    let msg_arg = message.as_deref().unwrap_or("");
+
+    for dir in ancestor_dirs {
+        let active_hooks = find_hook_files(&dir, "add");
+
+        for hook_p in active_hooks {
+            if is_executable(&hook_p) {
+                let output = Command::new(&hook_p)
+                    .arg(&target_rel)
+                    .arg(msg_arg)
+                    .output();
+                match output {
+                    Ok(out) => {
+                        let stdout_str = String::from_utf8_lossy(&out.stdout);
+                        if !stdout_str.is_empty() {
+                            if stdout_str.ends_with('\n') {
+                                print!("{}", stdout_str);
+                            } else {
+                                println!("{}", stdout_str);
+                            }
+                        }
+                        let stderr_str = String::from_utf8_lossy(&out.stderr);
+                        if !stderr_str.is_empty() {
+                            eprintln!("{}", stderr_str);
+                        }
+                        if !out.status.success() {
+                            return ExitCode::FAILURE;
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!(
+                            "error executing hook {}: {}",
+                            repo.relative_display_path(&hook_p),
+                            e
+                        );
+                        return ExitCode::FAILURE;
+                    }
+                }
+            } else {
+                print_file_content(repo, &hook_p);
+            }
+        }
+    }
+
     if let Some(msg) = message {
         let content = if msg.ends_with('\n') {
             msg

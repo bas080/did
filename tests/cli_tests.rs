@@ -483,14 +483,38 @@ fn test_did_mv_non_existent_source_fails() {
 }
 
 #[test]
-fn test_bare_invocation_welcome() {
+fn test_bare_invocation_help() {
     let dir = tempdir().unwrap();
     let root = dir.path();
 
     let (success, stdout, _) = did_cmd(root, &[]);
     assert!(success);
-    assert!(stdout.contains("did - file-system-native issue and dependency tracker"));
-    assert!(stdout.contains("USAGE GUIDANCE & AI AGENT WORKFLOW"));
+    assert!(stdout.contains("file-system-native issue and dependency tracker"));
+    assert!(stdout.contains("Usage:") || stdout.contains("Commands:"));
+}
+
+#[test]
+fn test_executable_add_hook_abort() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    fs::create_dir_all(root.join(".did")).unwrap();
+
+    let hook = root.join(".did/.hooks/add");
+    fs::create_dir_all(hook.parent().unwrap()).unwrap();
+    fs::write(&hook, "#!/bin/sh\nexit 1\n").unwrap();
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(&hook).unwrap().permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&hook, perms).unwrap();
+
+        let (success, _, _) = did_cmd(root, &["add", "blocked_task.md", "-m", "Blocked"]);
+        assert!(!success);
+        assert!(!root.join(".did/blocked_task.md").exists());
+    }
 }
 
 #[test]

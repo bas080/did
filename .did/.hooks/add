@@ -1,0 +1,17 @@
+#!/bin/sh
+TASK_PATH="$1"
+MSG="$2"
+
+QUERY="$MSG"
+if [ -z "$QUERY" ]; then
+  QUERY="$TASK_PATH"
+fi
+
+RELATED=$(./target/debug/did search "$QUERY" 2>/dev/null | grep -v "$TASK_PATH" || true)
+
+if [ -n "$RELATED" ]; then
+  echo "[NOTICE] Potential duplicate or related tasks found for '$QUERY':"
+  echo "$RELATED" | sed 's/^/  - /'
+fi
+
+exit 0
