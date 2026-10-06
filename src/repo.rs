@@ -43,7 +43,7 @@ impl Repo {
     /// - Otherwise, prefix with `.did` relative to project root (`did_dir.parent()`).
     pub fn resolve_path(&self, raw_path: &Path) -> PathBuf {
         let raw_str = raw_path.to_string_lossy();
-        if raw_str.starts_with(".did") {
+        let target = if raw_str.starts_with(".did") {
             // Strip ".did" or ".did/" prefix if relative
             let relative = raw_path.strip_prefix(".did").unwrap_or(raw_path);
             self.did_dir.join(relative)
@@ -59,7 +59,17 @@ impl Repo {
             }
         } else {
             self.did_dir.join(raw_path)
+        };
+
+        if std::env::var("DID_DEBUG").map(|v| !v.is_empty()).unwrap_or(false) {
+            eprintln!(
+                "[DEBUG] Repo path resolved: raw='{}' -> target='{}'",
+                raw_path.display(),
+                target.display()
+            );
         }
+
+        target
     }
 
     /// Returns the path relative to `did_dir` (e.g. "backend/auth/jwt.md").
@@ -107,6 +117,15 @@ mod tests {
 
         let rel_display = repo.relative_display_path(&path1);
         assert_eq!(rel_display, "backend/auth/jwt.md");
+    }
+
+    #[test]
+    fn test_resolve_absolute_did_path() {
+        let dir = tempdir().unwrap();
+        let repo = Repo::init(dir.path()).unwrap();
+        let abs_did_path = repo.did_dir.join("sub/task.md");
+        let resolved = repo.resolve_path(&abs_did_path);
+        assert_eq!(resolved, abs_did_path);
     }
 
     #[test]
