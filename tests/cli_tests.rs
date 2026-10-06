@@ -329,3 +329,28 @@ fn test_parent_repo_search() {
 
     assert!(root.join(".did/task.md").is_file());
 }
+
+#[test]
+fn test_execution_logging_xml() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    did_cmd(root, &["init"]);
+
+    let log_file_rel = ".did.log";
+    let (success, _, _) = did_cmd_env(
+        root,
+        &["status"],
+        &[("DID_LOG_PATH", log_file_rel)],
+    );
+    assert!(success);
+
+    let log_path = root.join(".did").join(log_file_rel);
+    assert!(log_path.is_file());
+
+    let content = fs::read_to_string(&log_path).unwrap();
+    assert!(content.contains("<invocation timestamp="));
+    assert!(content.contains("<command>"));
+    assert!(content.contains("<args>"));
+    assert!(content.contains("</invocation>"));
+}

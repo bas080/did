@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Repo {
     /// Absolute path to the .did directory (e.g. /workspace/project/.did)
     pub did_dir: PathBuf,

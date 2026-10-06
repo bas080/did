@@ -68,6 +68,10 @@ Prefixes the filename with a dot (`.jwt.md`), hiding it in filesystem listings a
 source <(did autocomplete bash)
 ```
 
+## Workflows & Prioritization
+
+For task prioritization strategies (such as MoSCoW subtree folders like `.did/must/`, `.did/should/`, or task metadata headers), see [docs/prioritization.md](docs/prioritization.md).
+
 ## CLI Reference
 
 ```
