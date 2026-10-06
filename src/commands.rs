@@ -401,9 +401,9 @@ fn is_executable(path: &Path) -> bool {
 }
 
 fn is_reserved_hook_file(path: &Path) -> bool {
-    let name = path.file_name().unwrap_or_default().to_string_lossy();
+    let stem = path.file_stem().unwrap_or_default().to_string_lossy();
     if matches!(
-        name.as_ref(),
+        stem.as_ref(),
         "show" | "status" | "done" | "add" | "link" | "mv"
     ) {
         if let Some(parent) = path.parent() {
@@ -414,6 +414,32 @@ fn is_reserved_hook_file(path: &Path) -> bool {
         }
     }
     false
+}
+
+fn find_hook_files(ancestor_dir: &Path, event: &str) -> Vec<PathBuf> {
+    let mut matches = Vec::new();
+
+    for sub in &[".hooks", "hooks"] {
+        let hook_dir = ancestor_dir.join(sub);
+        if hook_dir.is_dir() {
+            if let Ok(entries) = fs::read_dir(&hook_dir) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.is_file() {
+                        if let Some(stem) = path.file_stem() {
+                            if stem.to_string_lossy() == event {
+                                matches.push(path);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    matches.sort();
+    matches.dedup();
+    matches
 }
 
 fn cmd_show(repo: &Repo, raw_path: &Path, all: bool) -> ExitCode {
@@ -469,17 +495,9 @@ fn cmd_show(repo: &Repo, raw_path: &Path, all: bool) -> ExitCode {
     let mut printed_any = false;
 
     for dir in ancestor_dirs {
-        let hook_path = dir.join(".hooks").join("show");
-        let legacy_hook_path = dir.join("hooks").join("show");
-        let active_hook = if hook_path.is_file() {
-            Some(hook_path)
-        } else if legacy_hook_path.is_file() {
-            Some(legacy_hook_path)
-        } else {
-            None
-        };
+        let active_hooks = find_hook_files(&dir, "show");
 
-        if let Some(hook_p) = active_hook {
+        for hook_p in active_hooks {
             if is_executable(&hook_p) {
                 let output = Command::new(&hook_p).output();
                 match output {

@@ -108,6 +108,29 @@ fn test_show_hook_sibling_and_ancestor() {
 }
 
 #[test]
+fn test_show_hook_with_extension() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    did_cmd(root, &["init"]);
+
+    did_cmd(
+        root,
+        &["add", "backend/auth/jwt.md", "-m", "JWT implementation"],
+    );
+
+    // Create hook with extension .did/backend/.hooks/show.md
+    let ancestor_hook = root.join(".did/backend/.hooks/show.md");
+    fs::create_dir_all(ancestor_hook.parent().unwrap()).unwrap();
+    fs::write(&ancestor_hook, "Markdown hook content").unwrap();
+
+    let (success, stdout, _) = did_cmd(root, &["show", "backend/auth/jwt.md"]);
+    assert!(success);
+    assert!(stdout.contains("backend/.hooks/show.md"));
+    assert!(stdout.contains("Markdown hook content"));
+}
+
+#[test]
 fn test_status_and_hierarchy() {
     let dir = tempdir().unwrap();
     let root = dir.path();
