@@ -1,4 +1,5 @@
 use std::fs;
+use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::process::Command;
 use tempfile::tempdir;
@@ -69,18 +70,49 @@ fn test_add_and_show() {
     assert!(!success_dup);
     assert!(stderr.contains("path already exists"));
 
-    // Show nested task
-    let (success_show, stdout_show, _) = did_cmd(root, &["show", "backend/auth/jwt.md"]);
-    assert!(success_show);
-    assert_eq!(
-        stdout_show.trim(),
-        "notes.md\nParent notes\n\nbackend/auth/jwt.md\nJWT implementation"
-    );
-
     // Show directory fails
     let (success_show_dir, _, stderr_show_dir) = did_cmd(root, &["show", "backend"]);
     assert!(!success_show_dir);
     assert!(stderr_show_dir.contains("requires a task file, got directory"));
+}
+
+#[test]
+fn test_show_hook_executable_and_non_executable() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    did_cmd(root, &["init"]);
+
+    // Create task
+    did_cmd(
+        root,
+        &["add", "backend/auth/jwt.md", "-m", "JWT implementation"],
+    );
+
+    // Create non-executable hook backend/hooks/show
+    let hook_path = root.join(".did/backend/hooks/show");
+    fs::create_dir_all(hook_path.parent().unwrap()).unwrap();
+    fs::write(&hook_path, "Backend guidelines").unwrap();
+    fs::set_permissions(&hook_path, fs::Permissions::from_mode(0o644)).unwrap();
+
+    let (success1, stdout1, _) = did_cmd(root, &["show", "backend/auth/jwt.md"]);
+    assert!(success1);
+    assert_eq!(
+        stdout1.trim(),
+        "backend/hooks/show\nBackend guidelines\n\nbackend/auth/jwt.md\nJWT implementation"
+    );
+
+    // Now make hook executable
+    let script_content = "#!/bin/sh\necho \"Dynamic backend instruction\"";
+    fs::write(&hook_path, script_content).unwrap();
+    fs::set_permissions(&hook_path, fs::Permissions::from_mode(0o755)).unwrap();
+
+    let (success2, stdout2, _) = did_cmd(root, &["show", "backend/auth/jwt.md"]);
+    assert!(success2);
+    assert_eq!(
+        stdout2.trim(),
+        "Dynamic backend instruction\n\nbackend/auth/jwt.md\nJWT implementation"
+    );
 }
 
 #[test]

@@ -360,6 +360,26 @@ fn print_results_with_limit(results: Vec<String>, empty_msg: &str) {
     }
 }
 
+fn is_executable(path: &Path) -> bool {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if let Ok(meta) = fs::metadata(path) {
+            return meta.permissions().mode() & 0o111 != 0;
+        }
+    }
+    #[cfg(windows)]
+    {
+        if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
+            let ext_lower = ext.to_lowercase();
+            if ext_lower == "exe" || ext_lower == "bat" || ext_lower == "cmd" {
+                return true;
+            }
+        }
+    }
+    false
+}
+
 fn cmd_show(repo: &Repo, raw_path: &Path, all: bool) -> ExitCode {
     let target_path = repo.resolve_path(raw_path);
 
@@ -394,7 +414,7 @@ fn cmd_show(repo: &Repo, raw_path: &Path, all: bool) -> ExitCode {
         return ExitCode::FAILURE;
     }
 
-    // Collect files in parent directories top-down
+    // Collect ancestor directories top-down
     let mut ancestor_dirs = Vec::new();
     let mut curr = target_path.parent();
     while let Some(dir) = curr {
@@ -412,29 +432,46 @@ fn cmd_show(repo: &Repo, raw_path: &Path, all: bool) -> ExitCode {
     let mut printed_any = false;
 
     for dir in ancestor_dirs {
-        let mut files_in_dir = Vec::new();
-        if let Ok(entries) = fs::read_dir(&dir) {
-            for entry in entries.flatten() {
-                let p = entry.path();
-                if p.is_file() {
-                    let name = p.file_name().unwrap_or_default().to_string_lossy();
-                    if all || !name.starts_with('.') {
-                        files_in_dir.push(p);
+        let hook_path = dir.join("hooks").join("show");
+        if hook_path.is_file() {
+            if is_executable(&hook_path) {
+                let output = Command::new(&hook_path).output();
+                match output {
+                    Ok(out) => {
+                        if printed_any {
+                            println!();
+                        }
+                        let stdout_str = String::from_utf8_lossy(&out.stdout);
+                        if stdout_str.ends_with('\n') {
+                            print!("{}", stdout_str);
+                        } else {
+                            println!("{}", stdout_str);
+                        }
+                        if !out.status.success() {
+                            let stderr_str = String::from_utf8_lossy(&out.stderr);
+                            if !stderr_str.is_empty() {
+                                eprintln!("{}", stderr_str);
+                            }
+                            return ExitCode::FAILURE;
+                        }
+                        printed_any = true;
+                    }
+                    Err(e) => {
+                        eprintln!(
+                            "error executing hook {}: {}",
+                            repo.relative_display_path(&hook_path),
+                            e
+                        );
+                        return ExitCode::FAILURE;
                     }
                 }
+            } else {
+                if printed_any {
+                    println!();
+                }
+                print_file_content(repo, &hook_path);
+                printed_any = true;
             }
-        }
-        files_in_dir.sort();
-
-        for f in files_in_dir {
-            if f == target_path {
-                continue;
-            }
-            if printed_any {
-                println!();
-            }
-            print_file_content(repo, &f);
-            printed_any = true;
         }
     }
 
