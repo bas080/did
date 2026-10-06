@@ -21,6 +21,41 @@ When `OLD_PATH` is moved to `NEW_PATH`:
 - If `NEW_PATH` already exists as a file or directory, return an error (`error: destination path already exists: NEW_PATH`) unless moving into an existing directory.
 - Automatically create parent directories for `NEW_PATH` as needed (`mkdir -p`).
 
-### 4. Atomic Rollback on Failure
-- Perform pre-checks on permissions and destination paths before mutating the filesystem.
-- If symlink updating or file move fails midway, abort and report an error without corrupting the state.
+---
+
+## Required Unit & Integration Test Suite (`tests/cli_tests.rs`)
+
+To ensure `did mv` is robust and safe, implementation must be verified with the following test cases:
+
+1. **`test_did_mv_single_file_updates_inbound_symlinks`**:
+   - Create task file `backend/auth/jwt.md` and link it into `frontend/jwt.md`.
+   - Execute `did mv backend/auth/jwt.md backend/auth/token.md`.
+   - Assert `backend/auth/jwt.md` no longer exists and `backend/auth/token.md` exists.
+   - Assert `frontend/jwt.md` symlink target is updated to `../backend/auth/token.md`.
+
+2. **`test_did_mv_directory_updates_inbound_and_outbound_symlinks`**:
+   - Create folder `backend/auth/` containing task `jwt.md` and an outbound symlink `spec.md -> ../../docs/spec.md`.
+   - Create inbound symlink `frontend/jwt.md -> ../backend/auth/jwt.md`.
+   - Execute `did mv backend/auth backend/security`.
+   - Assert `backend/auth/` no longer exists and `backend/security/jwt.md` exists.
+   - Assert inbound symlink `frontend/jwt.md` points to `../backend/security/jwt.md`.
+   - Assert outbound symlink `backend/security/spec.md` target is updated relative to `backend/security/` (`../../docs/spec.md`).
+
+3. **`test_did_mv_destination_collision_fails`**:
+   - Create files `a.md` and `b.md`.
+   - Execute `did mv a.md b.md`.
+   - Assert command fails (exit code non-zero) and `stderr` contains `destination path already exists`.
+
+4. **`test_did_mv_auto_creates_parent_directories`**:
+   - Create task `a.md`.
+   - Execute `did mv a.md nested/deep/folder/a.md`.
+   - Assert parent directories `nested/deep/folder/` are created and `nested/deep/folder/a.md` exists.
+
+5. **`test_did_mv_resolved_dot_files`**:
+   - Create completed task `.jwt.md` and symlink `.jwt.md -> ../backend/auth/.jwt.md`.
+   - Execute `did mv backend/auth/.jwt.md backend/auth/.token.md`.
+   - Assert symlinks pointing to `.jwt.md` are updated to `.token.md`.
+
+6. **`test_did_mv_non_existent_source_fails`**:
+   - Execute `did mv non_existent.md target.md`.
+   - Assert exit code non-zero and error printed on `stderr`.
