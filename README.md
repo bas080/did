@@ -42,28 +42,22 @@ The compiled binary will be placed at `target/release/did`.
 
 ## Quick Start
 
-### 1. Initialize Tracker
+### 1. Add Tasks
 ```bash
-did init
-```
-Creates a `.did/` directory in the current project root.
-
-### 2. Add Tasks
-```bash
-# Add task with inline content
+# Add task with inline content (auto-creates .did/ directory)
 did add backend/auth/jwt.md -m "Implement JWT token validation"
 
 # Add task using $EDITOR
 did add frontend/ui/login.md
 ```
 
-### 3. Link Dependencies
+### 2. Link Dependencies
 ```bash
 # Link a task into another directory as a dependency
 did link backend/auth/jwt.md frontend/ui
 ```
 
-### 4. Check Status
+### 3. Check Status
 ```bash
 # List actionable tasks (unblocked leaf tasks)
 did status
@@ -72,16 +66,22 @@ did status
 did status -a
 ```
 
-### 5. Inspect Task
+### 4. Inspect Task
 ```bash
 did show backend/auth/jwt.md
 ```
 
-### 6. Resolve Task
+### 5. Resolve Task
 ```bash
 did done backend/auth/jwt.md
 ```
 Prefixes the filename with a dot (`.jwt.md`), hiding it in filesystem listings and updating any dependent symlinks.
+
+### 6. Mark Task Undone
+```bash
+did undone backend/auth/jwt.md
+```
+Removes the leading dot (`jwt.md`), restoring it as an open task.
 
 ### 7. Shell Completion
 ```bash
@@ -93,7 +93,7 @@ source <(did autocomplete bash)
 | Variable | Description |
 | :--- | :--- |
 | `DID_STATUS_LIMIT` / `DID_LIMIT` | Sets the maximum number of items returned by `did status` or `did search` before displaying a truncation notice on `stderr`. |
-| `DID_LOG_PATH` | Activates XML execution telemetry logging. Relative paths are resolved relative to the `.did/` state directory root. |
+| `DID_LOG_PATH` | Activates XML execution telemetry logging. Relative paths are resolved relative to the parent directory where `.did/` lives. |
 | `EDITOR` | Specifies the text editor to invoke when running `did add PATH` without a `-m` message flag (defaults to `vi`). |
 
 ## Workflows & Prioritization
@@ -107,12 +107,13 @@ SYNOPSIS
        did [FLAGS] [COMMAND] [ARGS...]
 
 COMMANDS
-       init           Create a .did state directory in the current root
        add            Create a task node or nested issue at PATH
        status         List actionables (leaf nodes with all sub-items done)
        show           Print task contents at PATH (requires sub-items done unless -a)
        done           Mark PATH as resolved (hides it; fails if sub-items remain open)
+       undone         Mark a resolved PATH as open/undone (removes leading dot)
        link           Symlink TARGET into DEST directory using TARGET's basename
+       mv             Move or rename a task file or directory at OLD_PATH to NEW_PATH
        autocomplete   Generate shell completion scripts (e.g. bash)
 
 FLAGS

@@ -31,25 +31,21 @@ fn did_cmd_env(dir: &Path, args: &[&str], envs: &[(&str, &str)]) -> (bool, Strin
 }
 
 #[test]
-fn test_init() {
+fn test_init_via_add() {
     let dir = tempdir().unwrap();
     let root = dir.path();
 
-    let (success, _, _) = did_cmd(root, &["init"]);
+    // did add automatically creates .did/
+    let (success, _, _) = did_cmd(root, &["add", "notes.md", "-m", "Parent notes"]);
     assert!(success);
     assert!(root.join(".did").is_dir());
-
-    // Calling init again is a no-op
-    let (success2, _, _) = did_cmd(root, &["init"]);
-    assert!(success2);
+    assert!(root.join(".did/notes.md").is_file());
 }
 
 #[test]
 fn test_add_and_show() {
     let dir = tempdir().unwrap();
     let root = dir.path();
-
-    did_cmd(root, &["init"]);
 
     // Add root task notes.md
     let (success1, _, _) = did_cmd(root, &["add", "notes.md", "-m", "Parent notes"]);
@@ -81,7 +77,7 @@ fn test_show_hook_sibling_and_ancestor() {
     let dir = tempdir().unwrap();
     let root = dir.path();
 
-    did_cmd(root, &["init"]);
+    fs::create_dir_all(root.join(".did")).unwrap();
 
     // Create task
     did_cmd(
@@ -112,7 +108,7 @@ fn test_show_hook_with_extension() {
     let dir = tempdir().unwrap();
     let root = dir.path();
 
-    did_cmd(root, &["init"]);
+    fs::create_dir_all(root.join(".did")).unwrap();
 
     did_cmd(
         root,
@@ -135,7 +131,7 @@ fn test_status_and_hierarchy() {
     let dir = tempdir().unwrap();
     let root = dir.path();
 
-    did_cmd(root, &["init"]);
+    fs::create_dir_all(root.join(".did")).unwrap();
 
     // Add two leaf tasks in backend/auth/
     did_cmd(root, &["add", "backend/auth/a.md", "-m", "Task A"]);
@@ -176,7 +172,7 @@ fn test_status_limit_env() {
     let dir = tempdir().unwrap();
     let root = dir.path();
 
-    did_cmd(root, &["init"]);
+    fs::create_dir_all(root.join(".did")).unwrap();
 
     did_cmd(root, &["add", "task1.md", "-m", "Task 1"]);
     did_cmd(root, &["add", "task2.md", "-m", "Task 2"]);
@@ -196,7 +192,7 @@ fn test_show_and_done_blocked_output() {
     let dir = tempdir().unwrap();
     let root = dir.path();
 
-    did_cmd(root, &["init"]);
+    fs::create_dir_all(root.join(".did")).unwrap();
 
     did_cmd(root, &["add", "backend/auth.md", "-m", "Auth task"]);
     did_cmd(root, &["add", "backend/auth/sub/research.md", "-m", "Research"]);
@@ -219,7 +215,7 @@ fn test_link_and_done_updates_symlink() {
     let dir = tempdir().unwrap();
     let root = dir.path();
 
-    did_cmd(root, &["init"]);
+    fs::create_dir_all(root.join(".did")).unwrap();
 
     did_cmd(root, &["add", "feature.md", "-m", "Feature requirement"]);
     did_cmd(
@@ -260,7 +256,7 @@ fn test_search_feature() {
     let dir = tempdir().unwrap();
     let root = dir.path();
 
-    did_cmd(root, &["init"]);
+    fs::create_dir_all(root.join(".did")).unwrap();
 
     did_cmd(root, &["add", "backend/auth/jwt.md", "-m", "Token verification"]);
     did_cmd(root, &["add", "frontend/login.md", "-m", "Calls JWT auth endpoint"]);
@@ -319,7 +315,7 @@ fn test_parent_repo_search() {
     let dir = tempdir().unwrap();
     let root = dir.path();
 
-    did_cmd(root, &["init"]);
+    fs::create_dir_all(root.join(".did")).unwrap();
 
     let sub = root.join("some").join("nested").join("dir");
     fs::create_dir_all(&sub).unwrap();
@@ -336,7 +332,7 @@ fn test_execution_logging_xml() {
     let dir = tempdir().unwrap();
     let root = dir.path();
 
-    did_cmd(root, &["init"]);
+    fs::create_dir_all(root.join(".did")).unwrap();
 
     let log_file_rel = ".did.log";
     let (success, _, _) = did_cmd_env(
@@ -361,7 +357,7 @@ fn test_did_mv_single_file_updates_inbound_symlinks() {
     let dir = tempdir().unwrap();
     let root = dir.path();
 
-    did_cmd(root, &["init"]);
+    fs::create_dir_all(root.join(".did")).unwrap();
 
     did_cmd(
         root,
@@ -389,7 +385,7 @@ fn test_did_mv_directory_updates_inbound_and_outbound_symlinks() {
     let dir = tempdir().unwrap();
     let root = dir.path();
 
-    did_cmd(root, &["init"]);
+    fs::create_dir_all(root.join(".did")).unwrap();
 
     did_cmd(root, &["add", "docs/spec.md", "-m", "Doc spec"]);
     did_cmd(
@@ -422,7 +418,7 @@ fn test_did_mv_destination_collision_fails() {
     let dir = tempdir().unwrap();
     let root = dir.path();
 
-    did_cmd(root, &["init"]);
+    fs::create_dir_all(root.join(".did")).unwrap();
 
     did_cmd(root, &["add", "a.md", "-m", "Task A"]);
     did_cmd(root, &["add", "b.md", "-m", "Task B"]);
@@ -437,7 +433,7 @@ fn test_did_mv_auto_creates_parent_directories() {
     let dir = tempdir().unwrap();
     let root = dir.path();
 
-    did_cmd(root, &["init"]);
+    fs::create_dir_all(root.join(".did")).unwrap();
 
     did_cmd(root, &["add", "a.md", "-m", "Task A"]);
 
@@ -452,7 +448,7 @@ fn test_did_mv_resolved_dot_files() {
     let dir = tempdir().unwrap();
     let root = dir.path();
 
-    did_cmd(root, &["init"]);
+    fs::create_dir_all(root.join(".did")).unwrap();
 
     did_cmd(
         root,
@@ -479,7 +475,7 @@ fn test_did_mv_non_existent_source_fails() {
     let dir = tempdir().unwrap();
     let root = dir.path();
 
-    did_cmd(root, &["init"]);
+    fs::create_dir_all(root.join(".did")).unwrap();
 
     let (success, _, stderr) = did_cmd(root, &["mv", "non_existent.md", "target.md"]);
     assert!(!success);
@@ -502,7 +498,7 @@ fn test_editor_failure_fails_add() {
     let dir = tempdir().unwrap();
     let root = dir.path();
 
-    did_cmd(root, &["init"]);
+    fs::create_dir_all(root.join(".did")).unwrap();
 
     let (success, _, stderr) = did_cmd_env(root, &["add", "failing_task.md"], &[("EDITOR", "false")]);
     assert!(!success);
@@ -514,7 +510,7 @@ fn test_link_non_existent_target_fails() {
     let dir = tempdir().unwrap();
     let root = dir.path();
 
-    did_cmd(root, &["init"]);
+    fs::create_dir_all(root.join(".did")).unwrap();
 
     let (success, _, stderr) = did_cmd(root, &["link", "non_existent.md", "dest_dir"]);
     assert!(!success);
@@ -536,7 +532,7 @@ fn test_executable_hook_failure_fails_show() {
     let dir = tempdir().unwrap();
     let root = dir.path();
 
-    did_cmd(root, &["init"]);
+    fs::create_dir_all(root.join(".did")).unwrap();
 
     did_cmd(root, &["add", "task.md", "-m", "Task content"]);
 
@@ -561,7 +557,7 @@ fn test_did_undone_restores_task_and_symlinks() {
     let dir = tempdir().unwrap();
     let root = dir.path();
 
-    did_cmd(root, &["init"]);
+    fs::create_dir_all(root.join(".did")).unwrap();
 
     did_cmd(
         root,
@@ -590,7 +586,7 @@ fn test_executable_done_hook_abort() {
     let dir = tempdir().unwrap();
     let root = dir.path();
 
-    did_cmd(root, &["init"]);
+    fs::create_dir_all(root.join(".did")).unwrap();
 
     did_cmd(root, &["add", "task.md", "-m", "Task content"]);
 
@@ -616,7 +612,7 @@ fn test_non_executable_done_hook_reminds() {
     let dir = tempdir().unwrap();
     let root = dir.path();
 
-    did_cmd(root, &["init"]);
+    fs::create_dir_all(root.join(".did")).unwrap();
 
     did_cmd(root, &["add", "task.md", "-m", "Task content"]);
 

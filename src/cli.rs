@@ -18,9 +18,6 @@ pub struct Cli {
 
 #[derive(Subcommand, Debug)]
 pub enum Commands {
-    /// Create a .did state directory in the current root
-    Init,
-
     /// Create a task node or nested issue at PATH
     Add {
         /// Task path

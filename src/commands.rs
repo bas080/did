@@ -22,11 +22,25 @@ fn symlink<P: AsRef<Path>, Q: AsRef<Path>>(original: P, link: Q) -> std::io::Res
 
 pub fn run(repo_opt: Option<Repo>, command: Commands, global_all: bool) -> ExitCode {
     match command {
-        Commands::Init => cmd_init(),
         Commands::Add { path, message } => {
-            let repo = match require_repo(repo_opt) {
-                Ok(r) => r,
-                Err(code) => return code,
+            let repo = match repo_opt {
+                Some(r) => r,
+                None => {
+                    let current_dir = match env::current_dir() {
+                        Ok(d) => d,
+                        Err(e) => {
+                            eprintln!("error getting current directory: {}", e);
+                            return ExitCode::FAILURE;
+                        }
+                    };
+                    match Repo::init(&current_dir) {
+                        Ok(r) => r,
+                        Err(e) => {
+                            eprintln!("error initializing .did directory: {}", e);
+                            return ExitCode::FAILURE;
+                        }
+                    }
+                }
             };
             cmd_add(&repo, &path, message)
         }
@@ -87,27 +101,10 @@ fn require_repo(repo_opt: Option<Repo>) -> Result<Repo, ExitCode> {
     match repo_opt {
         Some(repo) => Ok(repo),
         None => {
-            eprintln!("error: no .did state directory found. Run 'did init' first.");
+            eprintln!("error: no .did state directory found.");
             Err(ExitCode::FAILURE)
         }
     }
-}
-
-fn cmd_init() -> ExitCode {
-    let current_dir = match env::current_dir() {
-        Ok(d) => d,
-        Err(e) => {
-            eprintln!("error getting current directory: {}", e);
-            return ExitCode::FAILURE;
-        }
-    };
-
-    if let Err(e) = Repo::init(&current_dir) {
-        eprintln!("error initializing .did: {}", e);
-        return ExitCode::FAILURE;
-    }
-
-    ExitCode::SUCCESS
 }
 
 fn cmd_add(repo: &Repo, raw_path: &Path, message: Option<String>) -> ExitCode {
