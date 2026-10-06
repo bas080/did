@@ -70,7 +70,11 @@ fn log_execution(
 
     let log_path = if Path::new(&log_env).is_relative() {
         if let Some(repo) = repo_opt {
-            repo.did_dir.join(&log_env)
+            if let Some(parent) = repo.did_dir.parent() {
+                parent.join(&log_env)
+            } else {
+                repo.did_dir.join(&log_env)
+            }
         } else {
             PathBuf::from(&log_env)
         }

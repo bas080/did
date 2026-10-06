@@ -162,6 +162,7 @@ fn test_status_and_hierarchy() {
 
     // Now a.md and b.md are actionable again!
     let (_, stdout_stat3, stderr_stat3) = did_cmd(root, &["status"]);
+    println!("stderr_stat3: {:?}", stderr_stat3);
     assert_eq!(stdout_stat3.trim(), "backend/auth/a.md\nbackend/auth/b.md");
     assert!(stderr_stat3.contains("[0 blocked, 1 closed]"));
 
@@ -345,7 +346,7 @@ fn test_execution_logging_xml() {
     );
     assert!(success);
 
-    let log_path = root.join(".did").join(log_file_rel);
+    let log_path = root.join(log_file_rel);
     assert!(log_path.is_file());
 
     let content = fs::read_to_string(&log_path).unwrap();

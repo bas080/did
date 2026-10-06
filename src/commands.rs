@@ -275,8 +275,12 @@ fn update_symlinks_for_mv(repo: &Repo, old_path: &Path, new_path: &Path) {
     }
 }
 
-fn is_ignored_directory(name: &str) -> bool {
-    name == ".hooks" || name == "hooks" || name == "target"
+fn should_visit_entry(entry: &walkdir::DirEntry) -> bool {
+    let file_name = entry.file_name().to_string_lossy();
+    if file_name == ".hooks" || file_name == "hooks" || file_name == ".git" {
+        return false;
+    }
+    true
 }
 
 fn cmd_status(repo: &Repo, raw_path: Option<&Path>, all: bool) -> ExitCode {
@@ -299,7 +303,7 @@ fn cmd_status(repo: &Repo, raw_path: Option<&Path>, all: bool) -> ExitCode {
 
     for entry in WalkDir::new(&root_path)
         .into_iter()
-        .filter_entry(|e| !is_ignored_directory(&e.file_name().to_string_lossy()))
+        .filter_entry(should_visit_entry)
         .filter_map(|e| e.ok())
     {
         let path = entry.path();
@@ -359,7 +363,7 @@ fn cmd_search(repo: &Repo, query: &str, raw_path: Option<&Path>, all: bool) -> E
 
     for entry in WalkDir::new(&root_path)
         .into_iter()
-        .filter_entry(|e| !is_ignored_directory(&e.file_name().to_string_lossy()))
+        .filter_entry(should_visit_entry)
         .filter_map(|e| e.ok())
     {
         let path = entry.path();
@@ -745,17 +749,15 @@ fn get_unresolved_blocking_items(repo: &Repo, task_file: &Path) -> Vec<String> {
             let is_symlink = p.is_symlink();
             if p.is_dir() && !is_symlink {
                 let dir_name = p.file_name().unwrap_or_default().to_string_lossy();
-                if is_ignored_directory(&dir_name) {
+                if dir_name.starts_with('.') {
                     continue;
                 }
-                if !dir_name.starts_with('.') {
-                    if is_root_dir {
-                        if dir_name == task_stem {
-                            collect_unresolved_in_dir(repo, &p, &mut items);
-                        }
-                    } else {
+                if is_root_dir {
+                    if dir_name == task_stem {
                         collect_unresolved_in_dir(repo, &p, &mut items);
                     }
+                } else {
+                    collect_unresolved_in_dir(repo, &p, &mut items);
                 }
             }
         }
@@ -768,7 +770,7 @@ fn get_unresolved_blocking_items(repo: &Repo, task_file: &Path) -> Vec<String> {
 
 fn collect_unresolved_in_dir(repo: &Repo, dir: &Path, items: &mut Vec<String>) {
     let dir_name = dir.file_name().unwrap_or_default().to_string_lossy();
-    if is_ignored_directory(&dir_name) {
+    if dir_name.starts_with('.') {
         return;
     }
     for entry in WalkDir::new(dir).into_iter().filter_map(|e| e.ok()) {
