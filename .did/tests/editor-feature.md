@@ -1,0 +1,1 @@
+Write integration test for $EDITOR invocation in 'did add'. Suitable non-interactive commands for $EDITOR in tests include 'true' (exits zero) or 'touch' or shell scripts like 'sh -c "echo Content >> $1"'.
