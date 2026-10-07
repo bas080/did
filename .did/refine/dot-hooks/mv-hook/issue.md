@@ -28,3 +28,7 @@ Defines the lifecycle hook for `did mv <OLD_PATH> <NEW_PATH>`. The `mv` hook all
 ## Open Clarifying Questions for Refinement
 1. **Invocation Order**: Should `.hooks/mv` run before validating that `OLD_PATH` exists, or only after confirming valid paths?
 2. **Directory vs File Moves**: If `OLD_PATH` is a directory containing multiple sub-tasks, should `.hooks/mv` run once for the top directory or once per contained file?
+
+
+## Open Questions for Refinement (@bas080)
+1. @bas080 Should the `mv` hook execute before or after relative symlinks are updated in `.did/`?

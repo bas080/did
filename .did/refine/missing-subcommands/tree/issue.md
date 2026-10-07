@@ -13,3 +13,7 @@ Subcommand for rendering a visual directory tree showing tasks, sub-items, and d
    - Accepts `-L` / `--level` to limit tree rendering depth.
 3. **Task Status Color-Coding**:
    - Color-codes actionable leaf tasks, blocked nodes, and resolved (dot-prefixed) tasks.
+
+
+## Open Questions for Refinement (@bas080)
+1. @bas080 Should `did tree` use standard Unicode tree formatting (`├──`, `└──`) or ASCII fallback?

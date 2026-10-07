@@ -515,7 +515,7 @@ fn test_bare_invocation_help() {
 
     let (success, stdout, _) = did_cmd(root, &[]);
     assert!(success);
-    assert!(stdout.contains("file-system-native issue and dependency tracker"));
+    assert!(stdout.contains("filesystem-native issue tracker with hooks for defining local software factories"));
     assert!(stdout.contains("Usage:") || stdout.contains("Commands:"));
 }
 

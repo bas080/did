@@ -22,3 +22,7 @@ For each discovered `hooks/show` file:
 ### 3. Replacement of `agents.md`
 - Context files previously named `agents.md` or `AGENTS.md` are deprecated in favor of `hooks/show`.
 - Non-executable `hooks/show` files serve as static contextual instructions for human developers and AI agents.
+
+
+## Open Questions for Refinement (@bas080)
+1. @bas080 Should `show` hook output be prepended before task file contents or appended after?

@@ -13,3 +13,7 @@ Replaces simple substring matching in `did query` with fuzzy search and relevanc
 Integrate `fuzzy-matcher` or `nucleo` for `did query`:
 - Ranks search results by relevance score (path matches + header matches + content matches).
 - Allows typo-tolerant matching (e.g. `did query authjwt` matches `backend/auth/jwt.md`).
+
+
+## Open Questions for Refinement (@bas080)
+1. @bas080 Which fuzzy matching crate (`nucleo`, `fuzzy-matcher`, `skim`) is preferred for `did query` integration?

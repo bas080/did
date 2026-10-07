@@ -6,3 +6,7 @@ Achieves 90% line code coverage across `src/commands.rs`, `src/main.rs`, and `sr
 ## Requirements
 1. Add targeted unit/integration tests to reach 90% line coverage.
 2. Update CI workflow gate to `--fail-under-lines 90` in `.github/workflows/test.yml`.
+
+
+## Open Questions for Refinement (@bas080)
+1. @bas080 Should the CI coverage threshold be raised incrementally (e.g., 76% -> 85% -> 90%) across separate PRs?

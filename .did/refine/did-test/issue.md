@@ -37,3 +37,7 @@ Adds a `did test` subcommand that scans the `.did/` repository to verify reposit
 1. **Autofixing**: Should `did test` support a `--fix` flag to automatically repair broken symlinks or set `chmod +x` on shebang files?
 2. **Output Format**: Should `did test` output plain text lines or structured XML/JSON reports?
 3. **Exit Codes**: Should exit code `1` be returned for any error, or should exit codes distinguish between broken symlinks vs hook structure errors?
+
+
+## Open Questions for Refinement (@bas080)
+1. @bas080 Should `did test` accept flags for fix mode (`--fix`) or verbosity (`--verbose`)?

@@ -17,3 +17,7 @@ Users can query in-depth topic guides:
 
 ### 3. Implementation Approach
 - Embedded markdown / text help topics compiled directly into the binary or loaded from built-in help pages.
+
+
+## Open Questions for Refinement (@bas080)
+1. @bas080 Should extended help topic Markdown files be stored in `.did/.hooks/help/` or embedded inside the compiled binary?

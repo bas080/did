@@ -12,3 +12,7 @@
 2. **`did status`**:
    - Standard `did status` outputs only actionable leaf nodes to `stdout`.
    - When using the `-a` / `--all` or `-b` / `--blocked` flags, `did status` outputs blocked reasons and items to **`stderr`** (not `stdout`), ensuring `stdout` output remains clean and parseable.
+
+
+## Open Questions for Refinement (@bas080)
+1. @bas080 Should `did blocks TASK DEPENDENT` be added as an explicit subcommand alias for `did link`?

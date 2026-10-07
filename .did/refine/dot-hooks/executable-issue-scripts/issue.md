@@ -18,3 +18,7 @@ Allows task/issue files themselves to be executable scripts. When `did show <PAT
      - Print raw file content as standard markdown text.
 2. **Parent & Ancestor Directory Context**:
    - Continues ancestor `show` hook executions before running the target task script.
+
+
+## Open Questions for Refinement (@bas080)
+1. @bas080 Should executable issue scripts in `.did/` be executed during `did show` or only when an explicit `--exec` flag is passed?

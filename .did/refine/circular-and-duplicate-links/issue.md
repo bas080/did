@@ -48,3 +48,8 @@ An alternative design rule evaluates symlinks differently from regular task file
 - **Concise Dependency Specification**: Linking a single target into a folder (`did link target folder`) cleanly blocks all tasks in `folder` until `target` is done.
 - **No Extra Folder Nesting**: Users do not need to create extra subdirectories just to attach a symlink dependency.
 - **No Circular Symlink Cascades**: Symlinks act as terminal leaf dependencies for their containing directory.
+
+
+## Open Questions for Refinement (@bas080)
+1. @bas080 Should `did link` reject duplicate links and return an explicit non-zero exit code or exit silently with status 0?
+2. @bas080 Should cycle detection be performed recursively across all symlink chains during `did link`?

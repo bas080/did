@@ -14,3 +14,7 @@ did export-hooks <DEST_DIR>
 ## Requirements
 1. Scans `.did/` for all `.hooks` and `hooks` directories.
 2. Copies hook files and directory hierarchy into `<DEST_DIR>`, preserving permissions (`chmod +x`).
+
+
+## Open Questions for Refinement (@bas080)
+1. @bas080 Should hook configuration export/import be managed via `did export-hooks` or git submodules?

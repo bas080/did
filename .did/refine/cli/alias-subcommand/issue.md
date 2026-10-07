@@ -18,3 +18,8 @@ alias dm='did mv'
 ## Requirements
 1. Running `did alias` outputs the bash alias definitions directly to `stdout`.
 2. Can be sourced directly in `.bashrc` / `.zshrc` via `source <(did alias)`.
+
+
+## Open Questions for Refinement (@bas080)
+1. @bas080 Should `did alias` support custom user-defined alias mappings via environment variables or strictly hardcoded defaults?
+2. @bas080 Should completion scripts automatically source generated aliases?
