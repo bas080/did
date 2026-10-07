@@ -112,35 +112,10 @@ did undone implement/auth/jwt.md
 
 | Variable | Description |
 | :--- | :--- |
-| `DID_STATUS_LIMIT` / `DID_LIMIT` | Sets the maximum number of items returned by `did status` or `did query` before displaying a truncation notice on `stderr`. |
+| `DID_STATUS_LIMIT` | Sets the maximum number of items returned by `did status` or `did query` before displaying a truncation notice on `stderr`. |
 | `DID_LOG_PATH` | Activates XML execution telemetry logging. Relative paths are resolved relative to the parent directory where `.did/` lives. |
 | `DID_DEBUG` | Enables verbose diagnostic logging on `stderr`. |
 | `EDITOR` | Specifies the text editor to invoke when running `did add PATH` without a `-m` message flag (defaults to `vi`). |
-
-## CLI Reference
-
-```
-SYNOPSIS
-       did [FLAGS] [COMMAND] [ARGS...]
-
-COMMANDS
-       add            Create a task node or nested issue at PATH
-       status         List actionables (leaf nodes with all sub-items done)
-       query          Search task paths and file contents for QUERY (alias: search)
-       show           Print task contents at PATH (requires sub-items done unless -a)
-       done           Mark PATH as resolved (hides it; fails if sub-items remain open)
-       undone         Mark a resolved PATH as open/undone (removes leading dot)
-       link           Symlink TARGET into DEST directory as a dependency (alias: ln)
-       mv             Move or rename a task file or directory at OLD_PATH to NEW_PATH (alias: move)
-       rm             Remove a task file or directory at PATH (alias: remove)
-       test           Validate repository health and run test lifecycle hook
-       autocomplete   Generate shell completion scripts (e.g. bash)
-
-FLAGS
-       -h, --help     Print help information
-       -V, --version  Print version information
-       -a, --all      Include resolved (hidden) tasks and blocked nodes
-```
 
 ## License
 
