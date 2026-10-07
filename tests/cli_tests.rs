@@ -3,19 +3,6 @@ use std::path::Path;
 use std::process::Command;
 use tempfile::tempdir;
 
-fn did_cmd(dir: &Path, args: &[&str]) -> (bool, String, String) {
-    let bin_path = env!("CARGO_BIN_EXE_did");
-    let output = Command::new(bin_path)
-        .current_dir(dir)
-        .args(args)
-        .output()
-        .expect("Failed to execute did binary");
-
-    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-    (output.status.success(), stdout, stderr)
-}
-
 fn did_cmd_env(dir: &Path, args: &[&str], envs: &[(&str, &str)]) -> (bool, String, String) {
     let bin_path = env!("CARGO_BIN_EXE_did");
     let mut cmd = Command::new(bin_path);
@@ -23,11 +10,20 @@ fn did_cmd_env(dir: &Path, args: &[&str], envs: &[(&str, &str)]) -> (bool, Strin
     for (k, v) in envs {
         cmd.env(k, v);
     }
+    for (k, v) in std::env::vars() {
+        if k.starts_with("LLVM") || k.starts_with("CARGO_LLVM") {
+            cmd.env(k, v);
+        }
+    }
     let output = cmd.output().expect("Failed to execute did binary");
 
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
     (output.status.success(), stdout, stderr)
+}
+
+fn did_cmd(dir: &Path, args: &[&str]) -> (bool, String, String) {
+    did_cmd_env(dir, args, &[])
 }
 
 #[test]

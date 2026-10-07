@@ -8,25 +8,30 @@ The `.did/refine/` directory is the staging area for new, vague, or incomplete i
 
 Every issue in `.did/refine/` must be systematically expanded until it satisfies all items on the **Refinement Checklist**:
 
-### 1. Clear Problem Statement
+### 1. Clear Problem Statement & Context
 - What is the exact user pain point or missing capability?
 - Why is this feature or bug fix needed?
 
-### 2. Explicit Functional Requirements
+### 2. Feature Conflicts & System Interaction
+- **Document Feature Conflicts**: Identify and document any conflicting interactions with existing features or CLI subcommands that require investigation.
+- **Identify Tool Shortcomings**: Document any usability friction, ambiguities, or tool shortcomings that inhibit AI agents or human developers from using `did` effectively.
+- **Streamline CLI Usage**: Propose ways to streamline, simplify, or optimize the `did` CLI interface.
+
+### 3. Explicit Functional Requirements
 - **CLI Interface**: Exact command syntax, subcommand name, arguments, and flags.
 - **Environment Variables**: Names of environment variables (e.g. `DID_STATUS_LIMIT`), defaults, and override rules.
 - **Output Specifications**: Exact formatting for `stdout` and `stderr` outputs.
 - **Exit Codes**: Explicit exit codes (`0` for success, non-zero for failures/blocked tasks).
 
-### 3. Edge Cases & Failure Modes
+### 4. Edge Cases & Failure Modes
 - How should the feature behave when paths do not exist, target files are directories, or symlinks are broken?
 - How are conflicts, duplicates, or empty result sets handled?
 
-### 4. Dependency & Blocking Analysis
-- Does this task depend on other tasks or features (e.g., status limit depending on search)?
-- How does it fit into the AST task dependency tree without creating artificial bottlenecks or circular links?
+### 5. Dependency & Blocking Analysis
+- Does this task depend on other tasks or features?
+- How does it fit into the task dependency tree without creating artificial bottlenecks or circular links?
 
-### 5. Concrete Test Cases
+### 6. Concrete Test Cases
 - What specific integration and unit test scenarios are required to verify the implementation?
 
 ---
