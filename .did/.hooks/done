@@ -1,5 +1,9 @@
 #!/bin/sh
-did test
+if command -v did >/dev/null 2>&1; then
+    did test || exit 1
+else
+    cargo run -- test || exit 1
+fi
 
 echo "# Task Completion Guidelines"
 echo ""
