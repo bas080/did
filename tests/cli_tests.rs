@@ -10,11 +10,6 @@ fn did_cmd_env(dir: &Path, args: &[&str], envs: &[(&str, &str)]) -> (bool, Strin
     for (k, v) in envs {
         cmd.env(k, v);
     }
-    for (k, v) in std::env::vars() {
-        if k.starts_with("LLVM") || k.starts_with("CARGO_LLVM") {
-            cmd.env(k, v);
-        }
-    }
     let output = cmd.output().expect("Failed to execute did binary");
 
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();

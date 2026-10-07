@@ -453,6 +453,23 @@ fn cmd_search(repo: &Repo, query: &str, raw_path: Option<&Path>, all: bool) -> E
         return ExitCode::FAILURE;
     }
 
+    let root_rel = repo.relative_display_path(&root_path);
+    if run_ancestor_hooks(
+        repo,
+        &root_path,
+        HookEnv {
+            event: "query",
+            target: Some(&root_rel),
+            dest: None,
+            old: None,
+            new: None,
+        },
+    )
+    .is_err()
+    {
+        return ExitCode::FAILURE;
+    }
+
     let query_lower = query.to_lowercase();
     let mut results = Vec::new();
 
@@ -581,7 +598,7 @@ fn is_reserved_hook_file(path: &Path) -> bool {
     let stem = path.file_stem().unwrap_or_default().to_string_lossy();
     if matches!(
         stem.as_ref(),
-        "show" | "status" | "done" | "add" | "link" | "mv" | "test"
+        "show" | "status" | "done" | "add" | "link" | "mv" | "test" | "query"
     ) {
         if let Some(parent) = path.parent() {
             let parent_name = parent.file_name().unwrap_or_default().to_string_lossy();
@@ -987,10 +1004,10 @@ fn cmd_test(repo: &Repo) -> ExitCode {
                 let stem = path.file_stem().unwrap_or_default().to_string_lossy();
                 if !matches!(
                     stem.as_ref(),
-                    "show" | "status" | "done" | "add" | "link" | "mv" | "test"
+                    "show" | "status" | "done" | "add" | "link" | "mv" | "test" | "query"
                 ) {
                     violations.push(format!(
-                        "Invalid file in hook directory: '{}' (reserved hook names are show, status, done, add, link, mv, test)",
+                        "Invalid file in hook directory: '{}' (reserved hook names are show, status, done, add, link, mv, test, query)",
                         rel_display
                     ));
                 }

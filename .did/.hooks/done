@@ -1,2 +1,11 @@
 #!/bin/sh
 did test
+
+# TASK COMPLETION AND ISSUE CREATION RULES
+# 1. Non-`did` Command Dependency Detection:
+#    If you relied on non-`did` CLI commands (e.g. rm, ls, cat, find, mkdir) to interact with .did,
+#    you MUST create a refined issue under .did/refine/ proposing a missing `did` subcommand or flag.
+#
+# 2. Code/Config Duplication Detection:
+#    If code or configuration duplication was created or discovered during work,
+#    you MUST create a refined issue under .did/refine/ proposing refactoring or deduplication.

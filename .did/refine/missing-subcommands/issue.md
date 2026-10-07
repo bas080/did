@@ -1,17 +1,9 @@
-# Epic: Native `did` Subcommands for Issue Management Operations
+# Feature Specification: `did rm`, `did cat`, and `did clean` Subcommands
 
 ## Overview
-Tracks proposed native `did` subcommands that replace raw shell commands like `mv`, `rm`, `mkdir`, and `find` when managing issue states and repository structures.
+Identifies CLI operational gaps where developers or AI agents currently resort to non-`did` bash commands (`rm`, `cat`, `find`) to interact with `.did/`.
 
----
-
-## Sub-Issues
-
-1. **`mv`** (`.did/refine/missing-subcommands/mv/issue.md`):
-   - File and folder relocation with symlink target updating.
-
-2. **`rm`** (`.did/refine/missing-subcommands/rm/issue.md`):
-   - Safe removal of task nodes and checking for active referencing symlinks.
-
-3. **`tree`** (`.did/refine/missing-subcommands/tree/issue.md`):
-   - Visual directory tree rendering of tasks, sub-items, and dependency links.
+## Proposed Subcommands
+1. **`did rm <PATH>`**: Safely removes task files or directories from `.did/` while updating or warning about active inbound symlink dependencies.
+2. **`did cat <PATH>`**: Prints raw task file content without executing `show` hooks or parent context formatting.
+3. **`did clean`**: Detects and purges dangling/broken symlinks across `.did/`.
