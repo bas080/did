@@ -96,10 +96,6 @@ source <(did autocomplete bash)
 | `DID_LOG_PATH` | Activates XML execution telemetry logging. Relative paths are resolved relative to the parent directory where `.did/` lives. |
 | `EDITOR` | Specifies the text editor to invoke when running `did add PATH` without a `-m` message flag (defaults to `vi`). |
 
-## Workflows & Prioritization
-
-For task prioritization strategies (such as task metadata headers or priority folders like `.did/must/`), see [docs/prioritization.md](docs/prioritization.md).
-
 ## CLI Reference
 
 ```
