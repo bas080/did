@@ -1,18 +1,14 @@
-# Feature Proposal: Clarifying Dependency Link Directionality (`did link`)
+# Feature Proposal: Clarifying Dependency Linking & Diagnostics (`did blocks`)
 
-## Problem Statement
-AI agents and developers sometimes get confused about dependency directionality when using `did link`:
-Does `did link A B` mean "A depends on B" or "B depends on A"?
+## Overview & Core Semantics
+- **Linux `ln` Semantics**: `did link A B` (or `did ln A B`) works like the Linux `ln` command: it creates `A` as a sub-item inside directory `B`. Because `A` becomes a leaf sub-item inside `B`, **`B` depends on `A`** (meaning `A` is the prerequisite blocking `B`).
+- **Proposed Command Renaming**:
+  - Rename / alias `link` to `did blocks TASK DEPENDENT`.
+  - Example: `did blocks backend/auth/jwt.md frontend/ui` explicitly declares that `jwt.md` blocks `frontend/ui`.
 
-## Current Behavior & Rules
-- `did link TARGET DEST_DIR` creates a relative symlink pointing to `TARGET` inside `DEST_DIR`.
-- Because `DEST_DIR` contains an open symlink `TARGET`, **tasks inside `DEST_DIR` are blocked by `TARGET`**.
-- Therefore: **`TARGET` is the prerequisite / blocker, and tasks inside `DEST_DIR` are the dependent / blocked items.**
-
-## Proposals for Improvement
-1. **Explicit Alias / Subcommands**:
-   - `did depends-on <PREREQUISITE_TASK> <DEPENDENT_TASK_OR_DIR>`
-   - `did block <BLOCKED_TASK_OR_DIR> --by <PREREQUISITE_TASK>`
-2. **Help Guidance & Diagnostic Messages**:
-   - In `did show` and `did status`, print explicit diagnostic messages when tasks are blocked by symlinks:
-     `error: task 'frontend/login.md' is blocked by prerequisite link: 'backend/auth/jwt.md'`
+## Diagnostic Output Formatting Rules
+1. **`did show <PATH>`**:
+   - Displays explicit blocked diagnostics when `<PATH>` is blocked by unresolved sub-items or dependency symlinks.
+2. **`did status`**:
+   - Standard `did status` outputs only actionable leaf nodes to `stdout`.
+   - When using the `-a` / `--all` or `-b` / `--blocked` flags, `did status` outputs blocked reasons and items to **`stderr`** (not `stdout`), ensuring `stdout` output remains clean and parseable.
