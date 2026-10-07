@@ -1,0 +1,20 @@
+# Established Way of Working & Repository Guidelines
+
+## 1. Deep Planning Mode & Issue Creation First
+- **Core Rule**: All work MUST begin by creating a `did` issue (`did add refine/<issue>/issue.md`).
+- **Zero Doubt Requirement**: Before writing code or modifying plans, perform exploratory research and ask clarifying questions.
+
+## 2. Filesystem-Native Issue Lifecycle (`.did/`)
+- **Directory Hierarchy Standard**: Directly under `.did/`, ONLY `implement`, `refine`, and `wont` (plus reserved `.hooks`) exist.
+- **Staging in `.did/refine/`**: Unrefined or open proposals stay in `.did/refine/`.
+- **Promotion to `.did/implement/`**: Move issues to `.did/implement/` only when 100% ready with explicit requirements and test plans.
+- **Demotion Back to `.did/refine/` on Vagueness**: If any issue in `implement/` contains open questions, move it back to `refine/`.
+- **Documenting Rejected Proposals in `.did/wont/`**: Document rejected proposals inside `.did/wont/<PROPOSAL>/issue.md`.
+
+## 3. Hook Directory Sanctity (`.hooks/`)
+- `.hooks/` directories inside `.did/` subtrees are strictly reserved for hook files (`show`, `status`, `done`, `add`, `link`, `mv`).
+
+## 4. Testing & Verification Commands
+- Run tests: `cargo test`
+- Linting: `cargo clippy -- -D warnings`
+- Code coverage check: `cargo llvm-cov --fail-under-lines 85`

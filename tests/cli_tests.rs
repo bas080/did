@@ -1004,6 +1004,81 @@ fn test_show_hook_stdout_no_newline_and_stderr_failure() {
 }
 
 #[test]
+fn test_cli_aliases_ln_and_move() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    fs::create_dir_all(root.join(".did")).unwrap();
+
+    did_cmd(root, &["add", "a.md", "-m", "A"]);
+
+    let (s_move, _, _) = did_cmd(root, &["move", "a.md", "b.md"]);
+    assert!(s_move);
+    assert!(root.join(".did/b.md").is_file());
+
+    let (s_ln, _, _) = did_cmd(root, &["ln", "b.md", "sub"]);
+    assert!(s_ln);
+    assert!(root.join(".did/sub/b.md").is_symlink());
+}
+
+#[test]
+fn test_status_link_and_mv_hooks() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    fs::create_dir_all(root.join(".did")).unwrap();
+
+    let link_hook = root.join(".did/.hooks/link");
+    fs::create_dir_all(link_hook.parent().unwrap()).unwrap();
+    fs::write(
+        &link_hook,
+        "#!/bin/sh\nif echo \"$DID_TARGET\" | grep -q 'blocked'; then exit 1; fi\n",
+    )
+    .unwrap();
+
+    let mv_hook = root.join(".did/.hooks/mv");
+    fs::write(
+        &mv_hook,
+        "#!/bin/sh\nif echo \"$DID_NEW\" | grep -q 'blocked'; then exit 1; fi\n",
+    )
+    .unwrap();
+
+    let status_hook = root.join(".did/.hooks/status");
+    fs::write(&status_hook, "#!/bin/sh\necho 'Status hook running'\n").unwrap();
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        for h in &[&link_hook, &mv_hook, &status_hook] {
+            let mut perms = fs::metadata(h).unwrap().permissions();
+            perms.set_mode(0o755);
+            fs::set_permissions(h, perms).unwrap();
+        }
+
+        did_cmd(root, &["add", "task.md", "-m", "Task"]);
+        did_cmd(root, &["add", "blocked_task.md", "-m", "Blocked"]);
+
+        let (s_stat, stdout_stat, _) = did_cmd(root, &["status"]);
+        assert!(s_stat);
+        assert!(stdout_stat.contains("Status hook running"));
+
+        let (s_link_ok, _, _) = did_cmd(root, &["link", "task.md", "dest1"]);
+        assert!(s_link_ok);
+
+        let (s_link_fail, _, _) = did_cmd(root, &["link", "blocked_task.md", "dest2"]);
+        assert!(!s_link_fail);
+        assert!(!root.join(".did/dest2/blocked_task.md").exists());
+
+        let (s_mv_ok, _, _) = did_cmd(root, &["mv", "task.md", "task_renamed.md"]);
+        assert!(s_mv_ok);
+
+        let (s_mv_fail, _, _) = did_cmd(root, &["mv", "task_renamed.md", "blocked_renamed.md"]);
+        assert!(!s_mv_fail);
+        assert!(root.join(".did/task_renamed.md").exists());
+    }
+}
+
+#[test]
 fn test_non_executable_done_hook_reminds() {
     let dir = tempdir().unwrap();
     let root = dir.path();

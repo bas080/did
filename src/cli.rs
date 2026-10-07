@@ -62,6 +62,7 @@ pub enum Commands {
     },
 
     /// Symlink TARGET into DEST directory using TARGET's basename
+    #[command(alias = "ln")]
     Link {
         /// Target path
         target: PathBuf,
@@ -70,6 +71,7 @@ pub enum Commands {
     },
 
     /// Move or rename a task file or directory at OLD_PATH to NEW_PATH
+    #[command(alias = "move")]
     Mv {
         /// Source task path
         old_path: PathBuf,
