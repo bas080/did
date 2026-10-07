@@ -10,7 +10,7 @@ Adds a `-b` / `--blocked` flag to `did status` and `did query` to list **only** 
   `error: flags '-a/--all' and '-b/--blocked' are mutually exclusive and cannot be used together.`
 
 ### 2. Truncation Limit Handling
-- Output from `did status -b` respects `DID_STATUS_LIMIT` and `DID_LIMIT` environment variables.
+- Output from `did status -b` respects `DID_STATUS_LIMIT` environment variable.
 
 ### 3. Subtree Path Filtering
 - `did status -b [PATH]` filters blocked tasks within `PATH`.

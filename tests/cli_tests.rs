@@ -921,24 +921,6 @@ fn test_autocomplete_all_shells() {
     }
 }
 
-#[test]
-fn test_limit_env_did_limit() {
-    let dir = tempdir().unwrap();
-    let root = dir.path();
-
-    fs::create_dir_all(root.join(".did")).unwrap();
-
-    did_cmd(root, &["add", "task1.md", "-m", "1"]);
-    did_cmd(root, &["add", "task2.md", "-m", "2"]);
-
-    let (success, _, stderr) = did_cmd_env(
-        root,
-        &["status"],
-        &[("DID_STATUS_LIMIT", ""), ("DID_LIMIT", "1")],
-    );
-    assert!(success);
-    assert!(stderr.contains("status limit reached (1/2 items shown)"));
-}
 
 #[test]
 fn test_done_hook_stdout_and_stderr() {

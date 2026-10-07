@@ -1,5 +1,8 @@
 #!/bin/sh
-cargo test || exit 1
+if ! CARGO_TEST_OUT=$(cargo test 2>&1); then
+    echo "$CARGO_TEST_OUT" >&2
+    exit 1
+fi
 
 UNRESOLVED_IMPLEMENT=$(find .did/implement -type f ! -name ".*" ! -path "*/.hooks/*" 2>/dev/null)
 if [ -n "$UNRESOLVED_IMPLEMENT" ]; then

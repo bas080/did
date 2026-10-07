@@ -596,13 +596,8 @@ fn get_status_limit() -> Option<usize> {
             return Some(limit);
         }
     }
-    if let Ok(val) = env::var("DID_LIMIT") {
-        if let Ok(limit) = val.parse::<usize>() {
-            return Some(limit);
-        }
-    }
     for (key, val) in env::vars() {
-        if key.starts_with("DID_STATUS_") || key.starts_with("DID_LIMIT") {
+        if key.starts_with("DID_STATUS_") {
             if let Ok(limit) = val.parse::<usize>() {
                 return Some(limit);
             }
