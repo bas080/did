@@ -649,3 +649,42 @@ fn test_non_executable_done_hook_reminds() {
     assert!(stdout.contains("REMINDER: Mark undone if incomplete"));
     assert!(root.join(".did/.task.md").is_file());
 }
+
+#[test]
+fn test_did_test_clean_repo_passes() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    fs::create_dir_all(root.join(".did")).unwrap();
+
+    did_cmd(root, &["add", "backend/auth/jwt.md", "-m", "Task"]);
+
+    let (success, stdout, _) = did_cmd(root, &["test"]);
+    assert!(success);
+    assert!(stdout.contains("Repository check passed"));
+}
+
+#[test]
+fn test_did_test_detects_violations() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    fs::create_dir_all(root.join(".did")).unwrap();
+
+    // Create broken symlink in .did/frontend/broken.md
+    let broken_sym = root.join(".did/frontend/broken.md");
+    fs::create_dir_all(broken_sym.parent().unwrap()).unwrap();
+
+    #[cfg(unix)]
+    std::os::unix::fs::symlink("../backend/non_existent.md", &broken_sym).unwrap();
+
+    // Create invalid hook file .did/.hooks/invalid.md
+    let invalid_hook = root.join(".did/.hooks/invalid.md");
+    fs::create_dir_all(invalid_hook.parent().unwrap()).unwrap();
+    fs::write(&invalid_hook, "Invalid hook file").unwrap();
+
+    let (success, _, stderr) = did_cmd(root, &["test"]);
+    assert!(!success);
+    assert!(stderr.contains("Repository check failed"));
+    assert!(stderr.contains("[INVALID HOOK FILE]"));
+}

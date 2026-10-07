@@ -93,6 +93,13 @@ pub fn run(repo_opt: Option<Repo>, command: Commands, global_all: bool) -> ExitC
             };
             cmd_undone(&repo, &path)
         }
+        Commands::Test => {
+            let repo = match require_repo(repo_opt) {
+                Ok(r) => r,
+                Err(code) => return code,
+            };
+            cmd_test(&repo)
+        }
         Commands::Autocomplete { shell } => cmd_autocomplete(&shell),
     }
 }
@@ -884,6 +891,106 @@ fn cmd_undone(repo: &Repo, raw_path: &Path) -> ExitCode {
     update_symlinks(repo, &target_path, &new_target_path);
 
     ExitCode::SUCCESS
+}
+
+fn cmd_test(repo: &Repo) -> ExitCode {
+    let mut errors = Vec::new();
+
+    for entry in WalkDir::new(&repo.did_dir).into_iter().filter_map(|e| e.ok()) {
+        let p = entry.path();
+        if p == repo.did_dir {
+            continue;
+        }
+
+        let is_symlink = p.is_symlink();
+        let rel_display = repo.relative_display_path(p);
+
+        // Check 1: Symlink integrity
+        if is_symlink {
+            if !p.exists() {
+                let target_str = fs::read_link(p)
+                    .map(|t| t.to_string_lossy().to_string())
+                    .unwrap_or_else(|_| "unknown".to_string());
+                errors.push(format!(
+                    "[BROKEN SYMLINK] {} -> {}",
+                    rel_display, target_str
+                ));
+            } else if let Ok(target) = fs::read_link(p) {
+                let sym_name = p.file_name().unwrap_or_default().to_string_lossy();
+                let parent = p.parent().unwrap();
+                let abs_target = if target.is_relative() {
+                    parent.join(&target)
+                } else {
+                    target.clone()
+                };
+                if let Some(target_name) = abs_target.file_name() {
+                    let target_str = target_name.to_string_lossy();
+                    if target_str.starts_with('.') && !sym_name.starts_with('.') {
+                        errors.push(format!(
+                            "[DANGLING NON-DOT SYMLINK] {} points to resolved task {}",
+                            rel_display,
+                            repo.relative_display_path(&abs_target)
+                        ));
+                    }
+                }
+            }
+        }
+
+        // Check 2: Resolved task state
+        if p.is_file() && !is_symlink {
+            let name = p.file_name().unwrap_or_default().to_string_lossy();
+            if name.starts_with('.') && !is_reserved_hook_file(p) {
+                let blocking = get_unresolved_blocking_items(repo, p);
+                if !blocking.is_empty() {
+                    errors.push(format!(
+                        "[RESOLVED TASK BLOCKED] {} is marked done but has unresolved child sub-items",
+                        rel_display
+                    ));
+                }
+            }
+
+            // Check 3: Shebang executable check
+            if let Ok(content) = fs::read_to_string(p) {
+                if content.starts_with("#!") && !is_executable(p) {
+                    errors.push(format!(
+                        "[NON-EXECUTABLE SHEBANG] {} starts with shebang line but lacks execution permissions",
+                        rel_display
+                    ));
+                }
+            }
+
+            // Check 4: Hook directory sanctity
+            if let Some(parent) = p.parent() {
+                let parent_name = parent.file_name().unwrap_or_default().to_string_lossy();
+                if parent_name == ".hooks" || parent_name == "hooks" {
+                    let stem = p.file_stem().unwrap_or_default().to_string_lossy();
+                    if !matches!(
+                        stem.as_ref(),
+                        "show" | "status" | "done" | "add" | "link" | "mv"
+                    ) {
+                        errors.push(format!(
+                            "[INVALID HOOK FILE] {} is in {}/ but is not a reserved hook event name",
+                            rel_display, parent_name
+                        ));
+                    }
+                }
+            }
+        }
+    }
+
+    if errors.is_empty() {
+        println!("Repository check passed: .did state is clean and valid.");
+        ExitCode::SUCCESS
+    } else {
+        eprintln!(
+            "Repository check failed: {} issue(s) detected:",
+            errors.len()
+        );
+        for err in &errors {
+            eprintln!("  - {}", err);
+        }
+        ExitCode::FAILURE
+    }
 }
 
 fn cmd_autocomplete(shell: &str) -> ExitCode {
