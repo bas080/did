@@ -1,22 +1,16 @@
-# Feature Specification: `-b` / `--blocked` Flag for `did status` & `did search`
+# Feature Specification: `-b` / `--blocked` Flag for `did status` & `did query`
 
 ## Overview
-Proposes adding a `-b` / `--blocked` flag to `did status` and `did search`. While `-a` / `--all` includes all tasks (actionable, resolved, and blocked), `-b` selectively lists **only** blocked tasks (tasks that have unresolved sub-items in deeper subdirectories).
-
----
+Adds a `-b` / `--blocked` flag to `did status` and `did query` to list **only** blocked tasks (tasks with unresolved child sub-items or broken dependencies).
 
 ## Detailed Requirements
 
-### 1. Flag Definition
-- `-b` / `--blocked` flag added to `did status` and `did search`.
-- Can be combined with subtree path filters (e.g., `did status -b backend`).
+### 1. Mutual Exclusivity with `-a` / `--all`
+- Passing both `-a` and `-b` (e.g. `did status -a -b`) **fails with a non-zero exit code** and prints an error message to `stderr`:
+  `error: flags '-a/--all' and '-b/--blocked' are mutually exclusive and cannot be used together.`
 
-### 2. Output Rules
-- Displays only tasks that are blocked by unresolved child subdirectories or broken dependencies.
-- Prints `No blocked tasks found.` to `stderr` if no blocked tasks exist in the selected subtree.
+### 2. Truncation Limit Handling
+- Output from `did status -b` respects `DID_STATUS_LIMIT` and `DID_LIMIT` environment variables.
 
----
-
-## Open Clarifying Questions for Refinement (@bas080)
-1. **Precedence with `-a`**: @bas080 If both `-a` and `-b` are passed, should `-b` strictly override `-a` (showing only open blocked tasks) or filter `-a` (showing resolved blocked tasks as well)?
-2. **Limit Behavior**: @bas080 Should blocked task results count towards `DID_STATUS_LIMIT` truncations?
+### 3. Subtree Path Filtering
+- `did status -b [PATH]` filters blocked tasks within `PATH`.
