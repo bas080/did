@@ -1,0 +1,4 @@
+# Refinement Directory Guidelines (`.did/refine/.hooks/status`)
+
+- Tasks in `.did/refine/` require iterative specification and requirement clarification.
+- Move tasks to `.did/implement/` once requirements, edge cases, and test plans are 100% clear.

@@ -58,6 +58,13 @@ pub fn run(repo_opt: Option<Repo>, command: Commands, global_all: bool) -> ExitC
             };
             cmd_mv(&repo, &old_path, &new_path)
         }
+        Commands::Rm { path, recursive } => {
+            let repo = match require_repo(repo_opt) {
+                Ok(r) => r,
+                Err(code) => return code,
+            };
+            cmd_rm(&repo, &path, recursive)
+        }
         Commands::Status { path } => {
             let repo = match require_repo(repo_opt) {
                 Ok(r) => r,
@@ -182,6 +189,66 @@ fn cmd_add(repo: &Repo, raw_path: &Path, message: Option<String>) -> ExitCode {
     ExitCode::SUCCESS
 }
 
+fn cmd_rm(repo: &Repo, raw_path: &Path, recursive: bool) -> ExitCode {
+    let target_path = repo.resolve_path(raw_path);
+
+    let meta = match fs::symlink_metadata(&target_path) {
+        Ok(m) => m,
+        Err(_) => {
+            eprintln!(
+                "error: path does not exist: {}",
+                repo.relative_display_path(&target_path)
+            );
+            return ExitCode::FAILURE;
+        }
+    };
+
+    let is_dir = meta.is_dir() && !target_path.is_symlink();
+
+    if is_dir && !recursive {
+        let rel = repo.relative_display_path(&target_path);
+        eprintln!(
+            "error: '{}' is a directory. Use 'did rm -r {}' to remove recursively.",
+            rel, rel
+        );
+        return ExitCode::FAILURE;
+    }
+
+    let target_rel = repo.relative_display_path(&target_path);
+    if run_ancestor_hooks(
+        repo,
+        &target_path,
+        HookEnv {
+            event: "remove",
+            target: Some(&target_rel),
+            dest: None,
+            old: None,
+            new: None,
+        },
+    )
+    .is_err()
+    {
+        return ExitCode::FAILURE;
+    }
+
+    let remove_res = if is_dir {
+        fs::remove_dir_all(&target_path)
+    } else {
+        fs::remove_file(&target_path)
+    };
+
+    if let Err(e) = remove_res {
+        eprintln!(
+            "error removing path {}: {}",
+            repo.relative_display_path(&target_path),
+            e
+        );
+        return ExitCode::FAILURE;
+    }
+
+    ExitCode::SUCCESS
+}
+
 fn cmd_link(repo: &Repo, target_raw: &Path, dest_raw: &Path) -> ExitCode {
     let target_path = repo.resolve_path(target_raw);
     let dest_dir = repo.resolve_path(dest_raw);
@@ -281,7 +348,7 @@ fn cmd_mv(repo: &Repo, old_raw: &Path, new_raw: &Path) -> ExitCode {
         repo,
         &old_path,
         HookEnv {
-            event: "mv",
+            event: "move",
             target: Some(&old_rel),
             dest: None,
             old: Some(&old_rel),
@@ -598,7 +665,7 @@ fn is_reserved_hook_file(path: &Path) -> bool {
     let stem = path.file_stem().unwrap_or_default().to_string_lossy();
     if matches!(
         stem.as_ref(),
-        "show" | "status" | "done" | "add" | "link" | "mv" | "test" | "query"
+        "show" | "status" | "done" | "add" | "link" | "mv" | "move" | "test" | "query" | "remove"
     ) {
         if let Some(parent) = path.parent() {
             let parent_name = parent.file_name().unwrap_or_default().to_string_lossy();
@@ -1004,7 +1071,7 @@ fn cmd_test(repo: &Repo) -> ExitCode {
                 let stem = path.file_stem().unwrap_or_default().to_string_lossy();
                 if !matches!(
                     stem.as_ref(),
-                    "show" | "status" | "done" | "add" | "link" | "mv" | "test" | "query"
+                    "show" | "status" | "done" | "add" | "link" | "mv" | "move" | "test" | "query" | "remove"
                 ) {
                     violations.push(format!(
                         "Invalid file in hook directory: '{}' (reserved hook names are show, status, done, add, link, mv, test, query)",

@@ -1,11 +1,16 @@
 #!/bin/sh
 did test
 
-# TASK COMPLETION AND ISSUE CREATION RULES
-# 1. Non-`did` Command Dependency Detection:
-#    If you relied on non-`did` CLI commands (e.g. rm, ls, cat, find, mkdir) to interact with .did,
-#    you MUST create a refined issue under .did/refine/ proposing a missing `did` subcommand or flag.
-#
-# 2. Code/Config Duplication Detection:
-#    If code or configuration duplication was created or discovered during work,
-#    you MUST create a refined issue under .did/refine/ proposing refactoring or deduplication.
+echo "# Task Completion Guidelines"
+echo ""
+echo "[TASK COMPLETION CHECKLIST]"
+echo "Before completing a task, confirm that:"
+echo "1. All functional requirements are 100% satisfied with zero open questions or remaining work."
+echo "2. Automated unit and integration tests are written and passing (cargo test)."
+echo "3. Strict compiler linting passes without warnings (cargo clippy -- -D warnings)."
+echo "4. Required test coverage thresholds are met (cargo llvm-cov)."
+echo ""
+echo "[RULES]"
+echo "1. If you relied on non-did CLI commands (e.g. rm, ls, cat, find, mkdir) to interact with .did,"
+echo "   you MUST create a refined issue under .did/refine/ proposing a missing did subcommand or flag."
+echo "2. If code or configuration duplication is detected, you MUST create a refined issue under .did/refine/ proposing refactoring."

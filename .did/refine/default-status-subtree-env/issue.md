@@ -1,1 +1,1 @@
-Allow users to define an environment variable (e.g. DID_DEFAULT_SUBTREE or DID_STATUS_PATH) that specifies a default subtree under .did/ (e.g. .did/features) when running 'did status'. This further reduces the visible items printed on status to focus attention on active areas.
+Allow users to define an environment variable (e.g. DID_DEFAULT_SUBTREE or DID_STATUS_PATH) that specifies a default subtree under .did/ (e.g. .did/implement) when running 'did status'. This further reduces the visible items printed on status to focus attention on active areas.

@@ -80,6 +80,17 @@ pub enum Commands {
         new_path: PathBuf,
     },
 
+    /// Remove a task file or directory at PATH
+    #[command(alias = "remove")]
+    Rm {
+        /// Task file or directory path to remove
+        path: PathBuf,
+
+        /// Remove directories and their contents recursively
+        #[arg(short = 'r', long = "recursive")]
+        recursive: bool,
+    },
+
     /// Validate repository health and structure
     Test,
 

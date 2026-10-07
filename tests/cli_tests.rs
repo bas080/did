@@ -1027,7 +1027,7 @@ fn test_status_link_and_mv_hooks() {
     )
     .unwrap();
 
-    let mv_hook = root.join(".did/.hooks/mv");
+    let mv_hook = root.join(".did/.hooks/move");
     fs::write(
         &mv_hook,
         "#!/bin/sh\nif echo \"$DID_NEW\" | grep -q 'blocked'; then exit 1; fi\n",
@@ -1091,6 +1091,51 @@ fn test_did_test_subcommand() {
         assert!(!s_fail);
         assert!(stderr_fail.contains("Broken symlink:"));
     }
+}
+
+#[test]
+fn test_did_rm_and_remove_hook() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    fs::create_dir_all(root.join(".did")).unwrap();
+
+    did_cmd(root, &["add", "file.md", "-m", "Content"]);
+    did_cmd(root, &["add", "dir/sub.md", "-m", "Subcontent"]);
+
+    let (s_dir_fail, _, err_dir) = did_cmd(root, &["rm", "dir"]);
+    assert!(!s_dir_fail);
+    assert!(err_dir.contains("is a directory. Use 'did rm -r dir'"));
+
+    let remove_hook = root.join(".did/.hooks/remove");
+    fs::create_dir_all(remove_hook.parent().unwrap()).unwrap();
+    fs::write(
+        &remove_hook,
+        "#!/bin/sh\nif echo \"$DID_TARGET\" | grep -q 'protected'; then exit 1; fi\n",
+    )
+    .unwrap();
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(&remove_hook).unwrap().permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&remove_hook, perms).unwrap();
+
+        did_cmd(root, &["add", "protected.md", "-m", "Protected"]);
+
+        let (s_rm_protected, _, _) = did_cmd(root, &["remove", "protected.md"]);
+        assert!(!s_rm_protected);
+        assert!(root.join(".did/protected.md").is_file());
+    }
+
+    let (s_rm_file, _, _) = did_cmd(root, &["rm", "file.md"]);
+    assert!(s_rm_file);
+    assert!(!root.join(".did/file.md").exists());
+
+    let (s_rm_dir, _, _) = did_cmd(root, &["remove", "-r", "dir"]);
+    assert!(s_rm_dir);
+    assert!(!root.join(".did/dir").exists());
 }
 
 #[test]
