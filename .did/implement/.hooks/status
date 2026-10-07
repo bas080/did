@@ -1,0 +1,4 @@
+# Implementation Directory Guidelines (`.did/implement/.hooks/status`)
+
+- Tasks in `.did/implement/` are actionable and ready to be worked on.
+- Mark completed tasks resolved using `did done <PATH>`.
