@@ -32,6 +32,6 @@ Explores explicit prioritization mechanisms for task nodes within `did`. While p
 
 ---
 
-## Open Questions for Refinement
-1. Should priority be declared in task file content or via directory placement (`.did/must/`)?
-2. Should `did status` by default sort by priority before alphabetical path sorting?
+## Open Questions for Refinement (@bas080)
+1. @bas080 Should priority be declared in task file content (e.g. metadata header `Priority: P0`) or via directory placement (`.did/must/`)?
+2. @bas080 Should `did status` by default sort by priority before alphabetical path sorting?

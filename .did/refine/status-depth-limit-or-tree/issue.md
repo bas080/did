@@ -26,6 +26,6 @@ Proposes mechanisms to constrain traversal depth when querying task status or in
 
 ---
 
-## Open Questions for Refinement
-1. Should `-L 1` in `did status` print directory paths (e.g. `backend/auth/`) when actionable leaf tasks reside deeper inside, or only task files?
-2. Is `did tree` better suited as a separate subcommand rather than overloading `did status`?
+## Open Questions for Refinement (@bas080)
+1. @bas080 Should `-L 1` in `did status` print directory paths (e.g. `backend/auth/`) when actionable leaf tasks reside deeper inside, or only task files?
+2. @bas080 Is `did tree` better suited as a separate subcommand rather than overloading `did status`?

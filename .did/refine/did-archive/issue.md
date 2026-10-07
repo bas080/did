@@ -20,6 +20,6 @@ Proposes the `did archive [PATH]` subcommand to clean up resolved (dot-prefixed)
 
 ---
 
-## Open Questions for Refinement
-1. Should `did archive` move items to `.did/archive/` (visible directory) or `.did/.archive/` (hidden state folder)?
-2. Should `did archive` run automatically after `did done` or remain an explicit manual subcommand?
+## Open Questions for Refinement (@bas080)
+1. @bas080 Should `did archive` move items to `.did/archive/` (visible directory) or `.did/.archive/` (hidden state folder)?
+2. @bas080 Should `did archive` run automatically after `did done` or remain an explicit manual subcommand?
