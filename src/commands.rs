@@ -65,7 +65,7 @@ pub fn run(repo_opt: Option<Repo>, command: Commands, global_all: bool) -> ExitC
             };
             cmd_status(&repo, path.as_deref(), global_all)
         }
-        Commands::Search { query, path } => {
+        Commands::Query { query, path } => {
             let repo = match require_repo(repo_opt) {
                 Ok(r) => r,
                 Err(code) => return code,

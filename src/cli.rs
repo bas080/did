@@ -35,7 +35,8 @@ pub enum Commands {
     },
 
     /// Search task paths and task file contents for QUERY
-    Search {
+    #[command(alias = "search")]
+    Query {
         /// Search query string
         query: String,
 
@@ -83,6 +84,7 @@ pub enum Commands {
     Test,
 
     /// Generate shell completion scripts (e.g., bash)
+    #[command(hide = true)]
     Autocomplete {
         /// Shell name (e.g., bash)
         shell: String,

@@ -1,3 +1,12 @@
+# Task Completion Guidelines (`.did/.hooks/done`)
+
+[TASK COMPLETION CHECKLIST]
+Before completing a task, confirm that:
+1. All functional requirements are 100% satisfied with zero open questions or remaining work.
+2. Automated unit and integration tests are written and passing (`cargo test`).
+3. Strict compiler linting passes without warnings (`cargo clippy -- -D warnings`).
+4. Required test coverage thresholds are met (`cargo llvm-cov`).
+
 [REMINDER] If this issue or task was NOT fully completed or if remaining work/bugs were discovered:
   1. Mark the issue undone: $ did undone <PATH>
-  2. Move it back to refine/ with clarifying questions: $ did mv <PATH> refine/<PATH>
+  2. Move it back to refine/ with explicit clarifying questions: $ did mv <PATH> refine/<PATH>
