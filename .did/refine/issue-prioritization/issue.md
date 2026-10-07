@@ -18,7 +18,7 @@ Explores explicit prioritization mechanisms for task nodes within `did`. While p
 - Or simple key-value header: `Priority: High` / `Priority: P0` / `Priority: 1`.
 - `did status` sorts actionable tasks by priority level before path name.
 
-### Alternative 2: Priority Directory Categorization (MoSCoW / MoSCoW Subtrees)
+### Alternative 2: Priority Directory Categorization (Priority Subtrees)
 - Organize issues into top-level explicit priority subfolders within `.did/`:
   - `.did/must/` (P0 / Critical)
   - `.did/should/` (P1 / High)

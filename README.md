@@ -98,7 +98,7 @@ source <(did autocomplete bash)
 
 ## Workflows & Prioritization
 
-For task prioritization strategies (such as MoSCoW subtree folders like `.did/must/`, `.did/should/`, or task metadata headers), see [docs/prioritization.md](docs/prioritization.md).
+For task prioritization strategies (such as task metadata headers or priority folders like `.did/must/`), see [docs/prioritization.md](docs/prioritization.md).
 
 ## CLI Reference
 
