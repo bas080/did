@@ -17,6 +17,6 @@ Proposes adding a `-b` / `--blocked` flag to `did status` and `did search`. Whil
 
 ---
 
-## Open Clarifying Questions for Refinement
-1. **Precedence with `-a`**: If both `-a` and `-b` are passed, should `-b` strictly override `-a` (showing only open blocked tasks) or filter `-a` (showing resolved blocked tasks as well)?
-2. **Limit Behavior**: Should blocked task results count towards `DID_STATUS_LIMIT` truncations?
+## Open Clarifying Questions for Refinement (@bas080)
+1. **Precedence with `-a`**: @bas080 If both `-a` and `-b` are passed, should `-b` strictly override `-a` (showing only open blocked tasks) or filter `-a` (showing resolved blocked tasks as well)?
+2. **Limit Behavior**: @bas080 Should blocked task results count towards `DID_STATUS_LIMIT` truncations?
