@@ -12,26 +12,29 @@ Every issue in `.did/refine/` must be systematically expanded until it satisfies
 - What is the exact user pain point or missing capability?
 - Why is this feature or bug fix needed?
 
-### 2. Feature Conflicts & System Interaction
+### 2. User Feedback Tagging (`@bas080`)
+- **User Question Tagging**: Whenever user feedback or clarification is needed on an issue in `.did/refine/`, add `@bas080` to the issue document followed by the explicit question.
+
+### 3. Feature Conflicts & System Interaction
 - **Document Feature Conflicts**: Identify and document any conflicting interactions with existing features or CLI subcommands that require investigation.
 - **Identify Tool Shortcomings**: Document any usability friction, ambiguities, or tool shortcomings that inhibit AI agents or human developers from using `did` effectively.
 - **Streamline CLI Usage**: Propose ways to streamline, simplify, or optimize the `did` CLI interface.
 
-### 3. Explicit Functional Requirements
+### 4. Explicit Functional Requirements
 - **CLI Interface**: Exact command syntax, subcommand name, arguments, and flags.
 - **Environment Variables**: Names of environment variables (e.g. `DID_STATUS_LIMIT`), defaults, and override rules.
 - **Output Specifications**: Exact formatting for `stdout` and `stderr` outputs.
 - **Exit Codes**: Explicit exit codes (`0` for success, non-zero for failures/blocked tasks).
 
-### 4. Edge Cases & Failure Modes
+### 5. Edge Cases & Failure Modes
 - How should the feature behave when paths do not exist, target files are directories, or symlinks are broken?
 - How are conflicts, duplicates, or empty result sets handled?
 
-### 5. Dependency & Blocking Analysis
+### 6. Dependency & Blocking Analysis
 - Does this task depend on other tasks or features?
 - How does it fit into the task dependency tree without creating artificial bottlenecks or circular links?
 
-### 6. Concrete Test Cases
+### 7. Concrete Test Cases
 - What specific integration and unit test scenarios are required to verify the implementation?
 
 ---

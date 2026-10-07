@@ -1,2 +1,9 @@
 #!/bin/sh
-cargo test
+cargo test || exit 1
+
+UNRESOLVED_IMPLEMENT=$(find .did/implement -type f ! -name ".*" ! -path "*/.hooks/*" 2>/dev/null)
+if [ -n "$UNRESOLVED_IMPLEMENT" ]; then
+    echo "error: unresolved tasks remain in .did/implement/:" >&2
+    echo "$UNRESOLVED_IMPLEMENT" | sed 's/^/  - /' >&2
+    exit 1
+fi
