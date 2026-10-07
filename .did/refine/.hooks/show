@@ -34,7 +34,7 @@ Every issue in `.did/refine/` must be systematically expanded until it satisfies
 ## Transitioning Refined Issues
 
 - **Ready for Implementation**: Once an issue meets the Refinement Checklist, move it to `.did/implement/` (or its designated domain folder e.g., `.did/features/` or `.did/issues/`).
-- **Roadmap / MoSCoW Prioritization**: Categorize refined issues into MoSCoW priority directories:
-  - `.did/must/` (Must Have)
-  - `.did/should/` (Should Have)
-  - `.did/could/` (Could Have)
+- **Roadmap / Priority Categorization**: Categorize refined issues into priority directories:
+  - `.did/must/` (High Priority)
+  - `.did/should/` (Medium Priority)
+  - `.did/could/` (Low Priority)

@@ -93,6 +93,13 @@ pub fn run(repo_opt: Option<Repo>, command: Commands, global_all: bool) -> ExitC
             };
             cmd_undone(&repo, &path)
         }
+        Commands::Test => {
+            let repo = match require_repo(repo_opt) {
+                Ok(r) => r,
+                Err(code) => return code,
+            };
+            cmd_test(&repo)
+        }
         Commands::Autocomplete { shell } => cmd_autocomplete(&shell),
     }
 }
@@ -574,7 +581,7 @@ fn is_reserved_hook_file(path: &Path) -> bool {
     let stem = path.file_stem().unwrap_or_default().to_string_lossy();
     if matches!(
         stem.as_ref(),
-        "show" | "status" | "done" | "add" | "link" | "mv"
+        "show" | "status" | "done" | "add" | "link" | "mv" | "test"
     ) {
         if let Some(parent) = path.parent() {
             let parent_name = parent.file_name().unwrap_or_default().to_string_lossy();
@@ -927,6 +934,94 @@ fn cmd_undone(repo: &Repo, raw_path: &Path) -> ExitCode {
     update_symlinks(repo, &target_path, &new_target_path);
 
     ExitCode::SUCCESS
+}
+
+fn cmd_test(repo: &Repo) -> ExitCode {
+    if run_ancestor_hooks(
+        repo,
+        &repo.did_dir,
+        HookEnv {
+            event: "test",
+            target: None,
+            dest: None,
+            old: None,
+            new: None,
+        },
+    )
+    .is_err()
+    {
+        return ExitCode::FAILURE;
+    }
+
+    let mut violations = Vec::new();
+
+    for entry in WalkDir::new(&repo.did_dir).into_iter().filter_map(|e| e.ok()) {
+        let path = entry.path();
+        if path == repo.did_dir {
+            continue;
+        }
+
+        let rel_display = repo.relative_display_path(path);
+
+        if entry.path_is_symlink() {
+            if let Ok(target) = fs::read_link(path) {
+                let parent = path.parent().unwrap();
+                let abs_target = if target.is_relative() {
+                    parent.join(&target)
+                } else {
+                    target.clone()
+                };
+                if !abs_target.exists() && fs::symlink_metadata(&abs_target).is_err() {
+                    violations.push(format!(
+                        "Broken symlink: '{}' -> '{}' (target path does not exist)",
+                        rel_display,
+                        target.display()
+                    ));
+                }
+            }
+        }
+
+        if let Some(parent) = path.parent() {
+            let parent_name = parent.file_name().unwrap_or_default().to_string_lossy();
+            if parent_name == ".hooks" || parent_name == "hooks" {
+                let stem = path.file_stem().unwrap_or_default().to_string_lossy();
+                if !matches!(
+                    stem.as_ref(),
+                    "show" | "status" | "done" | "add" | "link" | "mv" | "test"
+                ) {
+                    violations.push(format!(
+                        "Invalid file in hook directory: '{}' (reserved hook names are show, status, done, add, link, mv, test)",
+                        rel_display
+                    ));
+                }
+            }
+        }
+
+        if path.is_file() && !is_executable(path) {
+            if let Ok(content) = fs::read_to_string(path) {
+                if content.starts_with("#!") {
+                    violations.push(format!(
+                        "File has shebang line but lacks execution permissions: '{}'",
+                        rel_display
+                    ));
+                }
+            }
+        }
+    }
+
+    if !violations.is_empty() {
+        eprintln!(
+            "error: .did repository health check failed with {} violations:",
+            violations.len()
+        );
+        for v in violations {
+            eprintln!("  - {}", v);
+        }
+        ExitCode::FAILURE
+    } else {
+        println!(".did state directory is clean.");
+        ExitCode::SUCCESS
+    }
 }
 
 fn cmd_autocomplete(shell: &str) -> ExitCode {

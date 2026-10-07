@@ -79,6 +79,9 @@ pub enum Commands {
         new_path: PathBuf,
     },
 
+    /// Validate repository health and structure
+    Test,
+
     /// Generate shell completion scripts (e.g., bash)
     Autocomplete {
         /// Shell name (e.g., bash)

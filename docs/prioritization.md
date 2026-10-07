@@ -6,11 +6,11 @@
 
 ## Prioritization Methods
 
-### 1. Subtree Folder Categorization (MoSCoW Method)
+### 1. Subtree Folder Categorization
 Organize tasks inside dedicated priority directories within `.did/`:
-- `.did/must/` (Must Have / High Priority)
-- `.did/should/` (Should Have / Medium Priority)
-- `.did/could/` (Could Have / Low Priority)
+- `.did/must/` (High Priority)
+- `.did/should/` (Medium Priority)
+- `.did/could/` (Low Priority)
 
 When evaluating actionable work, inspect higher priority subtrees first:
 ```bash

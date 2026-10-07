@@ -1079,6 +1079,30 @@ fn test_status_link_and_mv_hooks() {
 }
 
 #[test]
+fn test_did_test_subcommand() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    fs::create_dir_all(root.join(".did")).unwrap();
+
+    did_cmd(root, &["add", "task.md", "-m", "Task"]);
+
+    let (s_clean, stdout_clean, _) = did_cmd(root, &["test"]);
+    assert!(s_clean);
+    assert!(stdout_clean.contains(".did state directory is clean"));
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::symlink;
+        symlink(root.join(".did/non_existent.md"), root.join(".did/broken.md")).unwrap();
+
+        let (s_fail, _, stderr_fail) = did_cmd(root, &["test"]);
+        assert!(!s_fail);
+        assert!(stderr_fail.contains("Broken symlink:"));
+    }
+}
+
+#[test]
 fn test_non_executable_done_hook_reminds() {
     let dir = tempdir().unwrap();
     let root = dir.path();
