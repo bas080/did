@@ -125,65 +125,21 @@ fn cmd_add(repo: &Repo, raw_path: &Path, message: Option<String>) -> ExitCode {
         }
     }
 
-    // Collect ancestor directories top-down for add hooks
-    let mut ancestor_dirs = Vec::new();
-    let mut curr = target_path.parent();
-    while let Some(dir) = curr {
-        if dir == repo.did_dir {
-            ancestor_dirs.push(dir.to_path_buf());
-            break;
-        }
-        if dir.starts_with(&repo.did_dir) {
-            ancestor_dirs.push(dir.to_path_buf());
-        }
-        curr = dir.parent();
-    }
-    ancestor_dirs.reverse();
-
     let target_rel = repo.relative_display_path(&target_path);
-    let msg_arg = message.as_deref().unwrap_or("");
-
-    for dir in ancestor_dirs {
-        let active_hooks = find_hook_files(&dir, "add");
-
-        for hook_p in active_hooks {
-            if is_executable(&hook_p) {
-                let mut cmd = setup_hook_cmd(repo, &hook_p, "add", &target_rel);
-                let output = cmd
-                    .arg(&target_rel)
-                    .arg(msg_arg)
-                    .output();
-                match output {
-                    Ok(out) => {
-                        let stdout_str = String::from_utf8_lossy(&out.stdout);
-                        if !stdout_str.is_empty() {
-                            if stdout_str.ends_with('\n') {
-                                print!("{}", stdout_str);
-                            } else {
-                                println!("{}", stdout_str);
-                            }
-                        }
-                        let stderr_str = String::from_utf8_lossy(&out.stderr);
-                        if !stderr_str.is_empty() {
-                            eprintln!("{}", stderr_str);
-                        }
-                        if !out.status.success() {
-                            return ExitCode::FAILURE;
-                        }
-                    }
-                    Err(e) => {
-                        eprintln!(
-                            "error executing hook {}: {}",
-                            repo.relative_display_path(&hook_p),
-                            e
-                        );
-                        return ExitCode::FAILURE;
-                    }
-                }
-            } else {
-                print_file_content(repo, &hook_p);
-            }
-        }
+    if run_ancestor_hooks(
+        repo,
+        &target_path,
+        HookEnv {
+            event: "add",
+            target: Some(&target_rel),
+            dest: None,
+            old: None,
+            new: None,
+        },
+    )
+    .is_err()
+    {
+        return ExitCode::FAILURE;
     }
 
     if let Some(msg) = message {
@@ -254,6 +210,24 @@ fn cmd_link(repo: &Repo, target_raw: &Path, dest_raw: &Path) -> ExitCode {
         return ExitCode::FAILURE;
     }
 
+    let target_rel = repo.relative_display_path(&target_path);
+    let dest_rel = repo.relative_display_path(&dest_dir);
+    if run_ancestor_hooks(
+        repo,
+        &dest_dir,
+        HookEnv {
+            event: "link",
+            target: Some(&target_rel),
+            dest: Some(&dest_rel),
+            old: None,
+            new: None,
+        },
+    )
+    .is_err()
+    {
+        return ExitCode::FAILURE;
+    }
+
     let rel_target = match compute_relative_path(&dest_dir, &target_path) {
         Some(p) => p,
         None => target_path.clone(),
@@ -292,6 +266,24 @@ fn cmd_mv(repo: &Repo, old_raw: &Path, new_raw: &Path) -> ExitCode {
             eprintln!("error creating directories: {}", e);
             return ExitCode::FAILURE;
         }
+    }
+
+    let old_rel = repo.relative_display_path(&old_path);
+    let new_rel = repo.relative_display_path(&new_path);
+    if run_ancestor_hooks(
+        repo,
+        &old_path,
+        HookEnv {
+            event: "mv",
+            target: Some(&old_rel),
+            dest: None,
+            old: Some(&old_rel),
+            new: Some(&new_rel),
+        },
+    )
+    .is_err()
+    {
+        return ExitCode::FAILURE;
     }
 
     if let Err(e) = fs::rename(&old_path, &new_path) {
@@ -373,6 +365,23 @@ fn cmd_status(repo: &Repo, raw_path: Option<&Path>, all: bool) -> ExitCode {
             "error: path does not exist: {}",
             repo.relative_display_path(&root_path)
         );
+        return ExitCode::FAILURE;
+    }
+
+    let root_rel = repo.relative_display_path(&root_path);
+    if run_ancestor_hooks(
+        repo,
+        &root_path,
+        HookEnv {
+            event: "status",
+            target: Some(&root_rel),
+            dest: None,
+            old: None,
+            new: None,
+        },
+    )
+    .is_err()
+    {
         return ExitCode::FAILURE;
     }
 
@@ -577,14 +586,101 @@ fn is_reserved_hook_file(path: &Path) -> bool {
     false
 }
 
-fn setup_hook_cmd(repo: &Repo, hook_p: &Path, event: &str, target_rel: &str) -> Command {
-    let mut cmd = Command::new(hook_p);
-    cmd.env("DID_EVENT", event);
-    cmd.env("DID_TARGET", target_rel);
+struct HookEnv<'a> {
+    event: &'a str,
+    target: Option<&'a str>,
+    dest: Option<&'a str>,
+    old: Option<&'a str>,
+    new: Option<&'a str>,
+}
+
+fn run_ancestor_hooks(repo: &Repo, start_path: &Path, env_spec: HookEnv) -> Result<bool, ExitCode> {
+    let mut ancestor_dirs = Vec::new();
+    let mut curr = if start_path.is_dir() {
+        Some(start_path)
+    } else {
+        start_path.parent()
+    };
+    while let Some(dir) = curr {
+        if dir == repo.did_dir {
+            ancestor_dirs.push(dir.to_path_buf());
+            break;
+        }
+        if dir.starts_with(&repo.did_dir) {
+            ancestor_dirs.push(dir.to_path_buf());
+        }
+        curr = dir.parent();
+    }
+    ancestor_dirs.reverse();
+
     let root_dir = repo.did_dir.parent().unwrap_or(&repo.did_dir);
-    cmd.env("DID_REPO_ROOT", root_dir);
-    cmd.env("DID_STATE_DIR", &repo.did_dir);
-    cmd
+    let mut printed_any = false;
+
+    for dir in ancestor_dirs {
+        let active_hooks = find_hook_files(&dir, env_spec.event);
+
+        for hook_p in active_hooks {
+            if is_executable(&hook_p) {
+                let mut cmd = Command::new(&hook_p);
+                cmd.env("DID_EVENT", env_spec.event);
+                if let Some(t) = env_spec.target {
+                    cmd.env("DID_TARGET", t);
+                }
+                if let Some(d) = env_spec.dest {
+                    cmd.env("DID_DEST", d);
+                }
+                if let Some(o) = env_spec.old {
+                    cmd.env("DID_OLD", o);
+                }
+                if let Some(n) = env_spec.new {
+                    cmd.env("DID_NEW", n);
+                }
+                cmd.env("DID_REPO_ROOT", root_dir);
+                cmd.env("DID_STATE_DIR", &repo.did_dir);
+
+                let output = cmd.output();
+                match output {
+                    Ok(out) => {
+                        let stdout_str = String::from_utf8_lossy(&out.stdout);
+                        if !stdout_str.is_empty() {
+                            if printed_any {
+                                println!();
+                            }
+                            if stdout_str.ends_with('\n') {
+                                print!("{}", stdout_str);
+                            } else {
+                                println!("{}", stdout_str);
+                            }
+                            printed_any = true;
+                        }
+                        let stderr_str = String::from_utf8_lossy(&out.stderr);
+                        if !stderr_str.is_empty() {
+                            eprintln!("{}", stderr_str);
+                        }
+                        if !out.status.success() {
+                            return Err(ExitCode::FAILURE);
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!(
+                            "error executing hook {}: {}",
+                            repo.relative_display_path(&hook_p),
+                            e
+                        );
+                        return Err(ExitCode::FAILURE);
+                    }
+                }
+            } else {
+                if printed_any {
+                    println!();
+                }
+                print_file_content(repo, &hook_p);
+                printed_any = true;
+            }
+        }
+    }
+
+    Ok(printed_any)
 }
 
 fn find_hook_files(ancestor_dir: &Path, event: &str) -> Vec<PathBuf> {
@@ -655,70 +751,21 @@ fn cmd_show(repo: &Repo, raw_path: &Path, all: bool) -> ExitCode {
         return ExitCode::FAILURE;
     }
 
-    // Collect ancestor directories top-down
-    let mut ancestor_dirs = Vec::new();
-    let mut curr = target_path.parent();
-    while let Some(dir) = curr {
-        if dir == repo.did_dir {
-            ancestor_dirs.push(dir.to_path_buf());
-            break;
-        }
-        if dir.starts_with(&repo.did_dir) {
-            ancestor_dirs.push(dir.to_path_buf());
-        }
-        curr = dir.parent();
-    }
-    ancestor_dirs.reverse();
-
-    let mut printed_any = false;
-
     let target_rel = repo.relative_display_path(&target_path);
-
-    for dir in ancestor_dirs {
-        let active_hooks = find_hook_files(&dir, "show");
-
-        for hook_p in active_hooks {
-            if is_executable(&hook_p) {
-                let mut cmd = setup_hook_cmd(repo, &hook_p, "show", &target_rel);
-                let output = cmd.output();
-                match output {
-                    Ok(out) => {
-                        if printed_any {
-                            println!();
-                        }
-                        let stdout_str = String::from_utf8_lossy(&out.stdout);
-                        if stdout_str.ends_with('\n') {
-                            print!("{}", stdout_str);
-                        } else {
-                            println!("{}", stdout_str);
-                        }
-                        if !out.status.success() {
-                            let stderr_str = String::from_utf8_lossy(&out.stderr);
-                            if !stderr_str.is_empty() {
-                                eprintln!("{}", stderr_str);
-                            }
-                            return ExitCode::FAILURE;
-                        }
-                        printed_any = true;
-                    }
-                    Err(e) => {
-                        eprintln!(
-                            "error executing hook {}: {}",
-                            repo.relative_display_path(&hook_p),
-                            e
-                        );
-                        return ExitCode::FAILURE;
-                    }
-                }
-            } else {
-                if printed_any {
-                    println!();
-                }
-                print_file_content(repo, &hook_p);
-                printed_any = true;
-            }
-        }
-    }
+    let printed_any = match run_ancestor_hooks(
+        repo,
+        &target_path,
+        HookEnv {
+            event: "show",
+            target: Some(&target_rel),
+            dest: None,
+            old: None,
+            new: None,
+        },
+    ) {
+        Ok(p) => p,
+        Err(code) => return code,
+    };
 
     if printed_any {
         println!();
@@ -775,61 +822,21 @@ fn cmd_done(repo: &Repo, raw_path: &Path) -> ExitCode {
         return ExitCode::FAILURE;
     }
 
-    // Collect ancestor directories top-down for done hooks
-    let mut ancestor_dirs = Vec::new();
-    let mut curr = target_path.parent();
-    while let Some(dir) = curr {
-        if dir == repo.did_dir {
-            ancestor_dirs.push(dir.to_path_buf());
-            break;
-        }
-        if dir.starts_with(&repo.did_dir) {
-            ancestor_dirs.push(dir.to_path_buf());
-        }
-        curr = dir.parent();
-    }
-    ancestor_dirs.reverse();
-
     let target_rel = repo.relative_display_path(&target_path);
-
-    for dir in ancestor_dirs {
-        let active_hooks = find_hook_files(&dir, "done");
-
-        for hook_p in active_hooks {
-            if is_executable(&hook_p) {
-                let mut cmd = setup_hook_cmd(repo, &hook_p, "done", &target_rel);
-                let output = cmd.arg(&target_rel).output();
-                match output {
-                    Ok(out) => {
-                        let stdout_str = String::from_utf8_lossy(&out.stdout);
-                        if !stdout_str.is_empty() {
-                            if stdout_str.ends_with('\n') {
-                                print!("{}", stdout_str);
-                            } else {
-                                println!("{}", stdout_str);
-                            }
-                        }
-                        let stderr_str = String::from_utf8_lossy(&out.stderr);
-                        if !stderr_str.is_empty() {
-                            eprintln!("{}", stderr_str);
-                        }
-                        if !out.status.success() {
-                            return ExitCode::FAILURE;
-                        }
-                    }
-                    Err(e) => {
-                        eprintln!(
-                            "error executing hook {}: {}",
-                            repo.relative_display_path(&hook_p),
-                            e
-                        );
-                        return ExitCode::FAILURE;
-                    }
-                }
-            } else {
-                print_file_content(repo, &hook_p);
-            }
-        }
+    if run_ancestor_hooks(
+        repo,
+        &target_path,
+        HookEnv {
+            event: "done",
+            target: Some(&target_rel),
+            dest: None,
+            old: None,
+            new: None,
+        },
+    )
+    .is_err()
+    {
+        return ExitCode::FAILURE;
     }
 
     let new_filename = format!(".{}", file_name);
