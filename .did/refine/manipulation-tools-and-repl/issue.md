@@ -27,3 +27,7 @@ Provide an interactive shell mode where `did` subcommands act as first-class cit
   - Subcommands (`add`, `show`, `status`, `done`, `link`, `search`) execute directly as top-level shell commands.
   - Standard Bash commands (`ls`, `cd`, `cat`, `grep`, `pwd`) remain accessible inside the REPL environment.
   - Command line history, tab auto-completion, and readline support built-in.
+
+
+## Open Questions for Refinement (@bas080)
+1. @bas080 Should REPL mode be implemented using `rustyline` or kept as shell alias integration?

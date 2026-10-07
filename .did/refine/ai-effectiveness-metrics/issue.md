@@ -21,3 +21,8 @@ Conduct research to define measurable metrics, benchmark benchmarks, and evaluat
 ### 3. Fine-Tuning & Prompt Optimization
 - Evaluate how `.hooks/show` guidelines influence AI behavior.
 - Determine optimal CLI error formatting and suggestions that guide AI models back on track in a single turn.
+
+
+## Open Questions for Refinement (@bas080)
+1. @bas080 Should agent effectiveness metrics be tracked via structured XML execution logs (`DID_LOG_PATH`) or a dedicated metrics command?
+2. @bas080 Which specific workflow metrics (e.g. task resolution time, retry count) are highest priority to measure?

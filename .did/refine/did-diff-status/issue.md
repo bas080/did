@@ -18,3 +18,7 @@ Proposes `did diff [COMMIT/BRANCH]` to compare the current `.did/` state against
    [ADDED] backend/auth/jwt.md
    [RESOLVED] frontend/login.md (.login.md)
    ```
+
+
+## Open Questions for Refinement (@bas080)
+1. @bas080 Should `did diff` compare `.did` against `HEAD` or against a specified git ref/branch?

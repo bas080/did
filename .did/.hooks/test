@@ -7,3 +7,17 @@ if [ -n "$UNRESOLVED_IMPLEMENT" ]; then
     echo "$UNRESOLVED_IMPLEMENT" | sed 's/^/  - /' >&2
     exit 1
 fi
+
+UNTAGGED_REFINE=""
+for f in $(find .did/refine -type f ! -name ".*" ! -path "*/.hooks/*" 2>/dev/null); do
+    if ! grep -q "@bas080" "$f"; then
+        UNTAGGED_REFINE="$UNTAGGED_REFINE
+  - $f"
+    fi
+done
+
+if [ -n "$UNTAGGED_REFINE" ]; then
+    echo "error: issue files in .did/refine/ missing @bas080 tag:" >&2
+    echo "$UNTAGGED_REFINE" >&2
+    exit 1
+fi

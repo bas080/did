@@ -8,3 +8,7 @@ Increase line coverage for `src/commands.rs` from **76.09%** to **100%**.
 - Error handling in `cmd_link` when destination directory creation fails or target is invalid.
 - Non-zero exit status reporting in `cmd_show` when executable hooks exit with error.
 - Error paths in `cmd_autocomplete` for invalid shell name string parameters.
+
+
+## Open Questions for Refinement (@bas080)
+1. @bas080 Should additional unit tests for `commands.rs` error handling be added in `tests/cli_tests.rs` or `src/commands.rs`?

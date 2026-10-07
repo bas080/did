@@ -16,3 +16,8 @@ Documents real-world scenarios where calling `did` commands returned non-zero ex
 ## Actionable Recommendations
 - Always write failure diagnostics to `stderr` rather than `stdout`.
 - Include concrete, copy-pasteable CLI command suggestions in error messages.
+
+
+## Open Questions for Refinement (@bas080)
+1. @bas080 Should error messages print actionable remedy suggestions on a separate `stderr` line?
+2. @bas080 Should exit codes differentiate between state validation errors (code 2) and user input errors (code 1)?

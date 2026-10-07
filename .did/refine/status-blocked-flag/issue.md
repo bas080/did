@@ -14,3 +14,7 @@ Adds a `-b` / `--blocked` flag to `did status` and `did query` to list **only** 
 
 ### 3. Subtree Path Filtering
 - `did status -b [PATH]` filters blocked tasks within `PATH`.
+
+
+## Open Questions for Refinement (@bas080)
+1. @bas080 Should `did status -b` list blocked tasks grouped by blocking dependency or flat list?

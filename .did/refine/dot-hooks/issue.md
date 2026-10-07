@@ -36,3 +36,7 @@ Replaces `agents.md` with `hooks/<event>`. A unified lifecycle hooks system for 
 2. **`hooks` Directory Behavior**:
    - `hooks` is a reserved directory name for defining hook files and scripts.
    - Tasks and issues are permitted inside `hooks/` directories.
+
+
+## Open Questions for Refinement (@bas080)
+1. @bas080 Should `did` enforce execution timeout limits (e.g. 5s) on hook scripts to prevent hanging invocations?

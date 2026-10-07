@@ -24,3 +24,8 @@ Proposes output formatting improvements to `did show` and `did status` to maximi
 - **Stderr Summary & Diagnostic Tree**: Write category counters and blocked diagnostics exclusively to `stderr`:
   `[2 actionable, 1 blocked, 5 closed]`
   When `-b` or `-a` is passed, render blocked item dependency links to `stderr`.
+
+
+## Open Questions for Refinement (@bas080)
+1. @bas080 Should ANSI color output be disabled automatically when stdout is not a TTY or when `NO_COLOR` is set?
+2. @bas080 Should `did show` format Markdown headers with terminal formatting (bold/underline)?

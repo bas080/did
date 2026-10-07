@@ -5,7 +5,7 @@ use std::path::PathBuf;
 #[command(
     name = "did",
     version = "0.1.0",
-    about = "file-system-native issue and dependency tracker"
+    about = "filesystem-native issue tracker with hooks for defining local software factories"
 )]
 pub struct Cli {
     /// Include resolved (hidden) tasks and blocked nodes

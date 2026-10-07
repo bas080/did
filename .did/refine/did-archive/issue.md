@@ -13,3 +13,8 @@ Adds the `did archive [PATH]` subcommand to clean up resolved (dot-prefixed) tas
 
 ### 3. `.hooks` Preservation Guard
 - **Do NOT move directories that contain `.hooks` or `hooks` subdirectories**, preserving parent directory context and lifecycle hook scripts.
+
+
+## Open Questions for Refinement (@bas080)
+1. @bas080 Should `did archive` move completed dot-prefixed tasks to a `.did/.archive/` directory or compressed file?
+2. @bas080 Should archived tasks be searchable via `did query --archived`?

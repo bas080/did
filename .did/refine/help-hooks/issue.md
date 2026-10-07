@@ -23,3 +23,7 @@ Proposes adding a `did help hooks` subcommand (or topic help) to display built-i
   - `add`: Executed during task creation in `did add <PATH>`.
   - `status`: Executed during status queries.
   - `link`: Executed during symlink creation.
+
+
+## Open Questions for Refinement (@bas080)
+1. @bas080 Should `did help hooks` output built-in CLI hook docs or parse `.did/.hooks/` for project-specific hook documentation?

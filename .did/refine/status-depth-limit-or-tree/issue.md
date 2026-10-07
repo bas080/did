@@ -12,3 +12,7 @@ Adds a `-L <DEPTH>` / `--level <DEPTH>` flag to `did status` and introduces a se
 ### 2. `did tree [PATH]` Subcommand
 - Separate subcommand rendering task directories, files, and symlink dependencies in ASCII tree format.
 - Accepts `-L <DEPTH>` to limit printed tree depth.
+
+
+## Open Questions for Refinement (@bas080)
+1. @bas080 Should depth limiting (`-L`) apply to `did status` or strictly to `did tree`?

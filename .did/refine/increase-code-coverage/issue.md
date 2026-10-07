@@ -24,3 +24,7 @@ Tracks the effort to increase code coverage for `did` from the current baseline 
 
 3. **`src/repo.rs` (Current: 90.00%)**:
    - Add unit tests for edge cases in `relative_display_path` and `resolve_path`.
+
+
+## Open Questions for Refinement (@bas080)
+1. @bas080 What should the target minimum code coverage threshold be for CI enforcement (e.g. 85%, 90%, 100%)?
