@@ -1,6 +1,1 @@
-# Directory Organization & Status Guide (`.did/.hooks/status`)
-
-Where to find tasks and issues inside `.did/`:
-- `.did/refine/`: Staging area for new, unrefined, or open proposal issues requiring clarification.
-- `.did/implement/`: Ready-to-work issues with 100% complete specifications and concrete test plans.
-- `.did/wont/`: Rejected proposals and feature design decisions with rationale for not adopting.
+# Status Listing (`.did/.hooks/status`)
