@@ -665,7 +665,7 @@ fn is_reserved_hook_file(path: &Path) -> bool {
     let stem = path.file_stem().unwrap_or_default().to_string_lossy();
     if matches!(
         stem.as_ref(),
-        "show" | "status" | "done" | "add" | "link" | "mv" | "move" | "test" | "query" | "remove"
+        "show" | "status" | "done" | "add" | "link" | "mv" | "move" | "test" | "query" | "remove" | "help"
     ) {
         if let Some(parent) = path.parent() {
             let parent_name = parent.file_name().unwrap_or_default().to_string_lossy();
@@ -1071,7 +1071,7 @@ fn cmd_test(repo: &Repo) -> ExitCode {
                 let stem = path.file_stem().unwrap_or_default().to_string_lossy();
                 if !matches!(
                     stem.as_ref(),
-                    "show" | "status" | "done" | "add" | "link" | "mv" | "move" | "test" | "query" | "remove"
+                    "show" | "status" | "done" | "add" | "link" | "mv" | "move" | "test" | "query" | "remove" | "help"
                 ) {
                     violations.push(format!(
                         "Invalid file in hook directory: '{}' (reserved hook names are show, status, done, add, link, mv, test, query)",
