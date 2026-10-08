@@ -838,14 +838,8 @@ fn run_ancestor_hooks(repo: &Repo, start_path: &Path, env_spec: HookEnv) -> Resu
                             if printed_any {
                                 println!();
                             }
-                            if crate::renderer::should_color() {
-                                let hook_rel = repo.relative_display_path(&hook_p);
-                                crate::renderer::draw_box(&hook_rel, &stdout_str, crate::renderer::BoxStyle::Hook);
-                            } else if stdout_str.ends_with('\n') {
-                                print!("{}", stdout_str);
-                            } else {
-                                println!("{}", stdout_str);
-                            }
+                            let hook_rel = repo.relative_display_path(&hook_p);
+                            crate::renderer::draw_box(&hook_rel, &stdout_str, crate::renderer::BoxStyle::Hook);
                             printed_any = true;
                         }
                         let stderr_str = String::from_utf8_lossy(&out.stderr);
@@ -869,13 +863,9 @@ fn run_ancestor_hooks(repo: &Repo, start_path: &Path, env_spec: HookEnv) -> Resu
                 if printed_any {
                     println!();
                 }
-                if crate::renderer::should_color() {
-                    let hook_rel = repo.relative_display_path(&hook_p);
-                    if let Ok(content) = fs::read_to_string(&hook_p) {
-                        crate::renderer::draw_box(&hook_rel, &content, crate::renderer::BoxStyle::Hook);
-                    }
-                } else {
-                    print_file_content(repo, &hook_p);
+                let hook_rel = repo.relative_display_path(&hook_p);
+                if let Ok(content) = fs::read_to_string(&hook_p) {
+                    crate::renderer::draw_box(&hook_rel, &content, crate::renderer::BoxStyle::Hook);
                 }
                 printed_any = true;
             }
@@ -977,6 +967,18 @@ fn cmd_show(repo: &Repo, raw_path: &Path, _all: bool) -> ExitCode {
         println!();
     }
     print_file_content(repo, &target_path);
+
+    let related = find_related_items(repo, &target_path);
+    if !related.is_empty() {
+        let mut related_md = String::new();
+        for item in &related {
+            related_md.push_str(&format!("* {}\n", item));
+        }
+        if crate::renderer::should_box() || crate::renderer::should_color() {
+            println!();
+            crate::renderer::draw_box("Related Items", &related_md, crate::renderer::BoxStyle::AdditionalInfo);
+        }
+    }
 
     ExitCode::SUCCESS
 }
@@ -1435,11 +1437,105 @@ fn cmd_autocomplete(shell: &str) -> ExitCode {
     ExitCode::SUCCESS
 }
 
+fn extract_issue_title(task_path: &Path) -> String {
+    if let Ok(content) = fs::read_to_string(task_path) {
+        for line in content.lines() {
+            let trimmed = line.trim();
+            if !trimmed.is_empty() {
+                if let Some(header) = trimmed.strip_prefix('#') {
+                    return header.trim_start_matches('#').trim().to_string();
+                }
+                return trimmed.to_string();
+            }
+        }
+    }
+    task_path
+        .file_stem()
+        .unwrap_or_default()
+        .to_string_lossy()
+        .to_string()
+}
+
+fn get_related_limit() -> usize {
+    if let Ok(val) = env::var("DID_RELATED_LIMIT") {
+        if let Ok(limit) = val.parse::<usize>() {
+            return limit;
+        }
+    }
+    5
+}
+
+fn find_related_items(repo: &Repo, task_path: &Path) -> Vec<String> {
+    let title = extract_issue_title(task_path);
+    let self_rel = repo.relative_display_path(task_path);
+
+    let stop_words = ["the", "a", "an", "and", "or", "in", "on", "at", "to", "for", "of", "with", "is", "are"];
+
+    let query_terms: Vec<String> = title
+        .split_whitespace()
+        .map(|w| w.trim_matches(|c: char| !c.is_alphanumeric()).to_lowercase())
+        .filter(|w| w.len() > 1 && !stop_words.contains(&w.as_str()))
+        .collect();
+
+    if query_terms.is_empty() {
+        return Vec::new();
+    }
+
+    let limit = get_related_limit();
+    let mut related = Vec::new();
+
+    for entry in WalkDir::new(&repo.did_dir)
+        .into_iter()
+        .filter_entry(should_visit_entry)
+        .filter_map(|e| e.ok())
+    {
+        let path = entry.path();
+        if path == repo.did_dir || path == task_path || is_reserved_hook_file(path) {
+            continue;
+        }
+
+        let is_symlink = entry.path_is_symlink();
+        let is_file = path.is_file();
+
+        if is_file || is_symlink {
+            let file_name = path.file_name().unwrap_or_default().to_string_lossy();
+            if file_name.starts_with('.') {
+                continue;
+            }
+
+            let rel_display = repo.relative_display_path(path);
+            if rel_display == self_rel {
+                continue;
+            }
+
+            let lower_rel = rel_display.to_lowercase();
+            let content_lower = if is_file {
+                fs::read_to_string(path).unwrap_or_default().to_lowercase()
+            } else {
+                String::new()
+            };
+
+            let matches = query_terms.iter().any(|term| {
+                lower_rel.contains(term) || content_lower.contains(term)
+            });
+
+            if matches {
+                related.push(rel_display);
+            }
+        }
+    }
+
+    related.sort();
+    related.dedup();
+    related.truncate(limit);
+    related
+}
+
 fn print_file_content(repo: &Repo, path: &Path) {
     let rel = repo.relative_display_path(path);
     match fs::read_to_string(path) {
         Ok(content) => {
-            if crate::renderer::should_color() {
+            if crate::renderer::should_box() || crate::renderer::should_color() {
                 crate::renderer::draw_box(&rel, &content, crate::renderer::BoxStyle::TaskContent);
             } else {
                 println!("{}", rel);
