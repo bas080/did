@@ -179,6 +179,31 @@ fn test_status_limit_env() {
 }
 
 #[test]
+fn test_status_default_path_env() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    did_cmd(root, &["add", "root_task.md", "-m", "Root task"]);
+    did_cmd(root, &["add", "subdir/task1.md", "-m", "Subdir task 1"]);
+
+    // With DID_STATUS_PATH=subdir, status should target subdir
+    let (success1, stdout1, _) = did_cmd_env(root, &["status"], &[("DID_STATUS_PATH", "subdir")]);
+    assert!(success1);
+    assert!(stdout1.contains("subdir/task1.md"));
+    assert!(!stdout1.contains("root_task.md"));
+
+    // Explicit path CLI argument takes precedence over DID_STATUS_PATH
+    let (success2, stdout2, _) = did_cmd_env(
+        root,
+        &["status", "root_task.md"],
+        &[("DID_STATUS_PATH", "subdir")],
+    );
+    assert!(success2);
+    assert!(stdout2.contains("root_task.md"));
+    assert!(!stdout2.contains("subdir/task1.md"));
+}
+
+#[test]
 fn test_show_and_done_blocked_output() {
     let dir = tempdir().unwrap();
     let root = dir.path();
@@ -1076,6 +1101,19 @@ fn test_did_test_subcommand() {
 }
 
 #[test]
+fn test_did_test_empty_file_fails() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    fs::create_dir_all(root.join(".did")).unwrap();
+    fs::write(root.join(".did/empty_task.md"), "   \n\t ").unwrap();
+
+    let (s_fail, _, stderr_fail) = did_cmd(root, &["test"]);
+    assert!(!s_fail);
+    assert!(stderr_fail.contains("Empty or whitespace-only task file found: 'empty_task.md'"));
+}
+
+#[test]
 fn test_did_test_executable_without_shebang_fails() {
     let dir = tempdir().unwrap();
     let root = dir.path();
@@ -1200,6 +1238,29 @@ fn test_help_topic_subcommand() {
     let (success, stdout, _) = did_cmd(root, &["help", "status"]);
     assert!(success);
     assert!(stdout.contains("List actionables"));
+}
+
+#[test]
+fn test_help_topic_alias() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    for (alias, expected_term) in [
+        ("ln", "Symlink TARGET"),
+        ("search", "Search task paths"),
+        ("move", "Move or rename"),
+        ("remove", "Remove a task file"),
+    ] {
+        let (success, stdout, _) = did_cmd(root, &["help", alias]);
+        assert!(success, "did help {} should succeed", alias);
+        assert!(
+            stdout.contains(expected_term),
+            "did help {} output should contain '{}', got: {}",
+            alias,
+            expected_term,
+            stdout
+        );
+    }
 }
 
 #[test]

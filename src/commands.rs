@@ -432,7 +432,17 @@ fn should_visit_entry(entry: &walkdir::DirEntry) -> bool {
 fn cmd_status(repo: &Repo, raw_path: Option<&Path>, all: bool) -> ExitCode {
     let root_path = match raw_path {
         Some(p) => repo.resolve_path(p),
-        None => repo.did_dir.clone(),
+        None => {
+            if let Ok(env_path) = env::var("DID_STATUS_PATH") {
+                if !env_path.trim().is_empty() {
+                    repo.resolve_path(Path::new(&env_path))
+                } else {
+                    repo.did_dir.clone()
+                }
+            } else {
+                repo.did_dir.clone()
+            }
+        }
     };
 
     if !root_path.exists() {
@@ -1100,7 +1110,16 @@ fn cmd_test(repo: &Repo) -> ExitCode {
             }
         }
 
-        if path.is_file() {
+        if path.is_file() && !entry.path_is_symlink() {
+            if let Ok(content) = fs::read_to_string(path) {
+                if content.trim().is_empty() {
+                    violations.push(format!(
+                        "Empty or whitespace-only task file found: '{}'",
+                        rel_display
+                    ));
+                }
+            }
+
             if !is_executable(path) {
                 if let Ok(content) = fs::read_to_string(path) {
                     if content.starts_with("#!") {
@@ -1175,9 +1194,16 @@ pub fn cmd_help(repo_opt: Option<&Repo>, topic: Option<&str>) -> ExitCode {
             print_hooks_topic_help();
         }
         Some(t) => {
+            let t_resolved = match t {
+                "ln" => "link",
+                "search" => "query",
+                "move" => "mv",
+                "remove" => "rm",
+                other => other,
+            };
             use clap::CommandFactory;
             let mut cmd = crate::cli::Cli::command();
-            if let Some(sub) = cmd.find_subcommand_mut(t) {
+            if let Some(sub) = cmd.find_subcommand_mut(t_resolved) {
                 let _ = sub.print_help();
                 println!();
             } else {

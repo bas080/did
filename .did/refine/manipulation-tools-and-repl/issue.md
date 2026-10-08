@@ -16,3 +16,5 @@ Instead of a dedicated TUI/REPL binary, `did` will provide a mechanism for users
 - Provide a command (e.g., `did shell-init`) that outputs the necessary alias definitions for the user's current shell (Bash/Zsh).
 - This allows users to source the aliases into their `.bashrc` or `.zshrc`, enabling them to run `status`, `show`, `done`, etc., as first-class citizens in their native terminal.
 - This approach maintains the "coding agent first" philosophy by avoiding binary bloat and staying compatible with existing shell workflows.
+
+@bas080
