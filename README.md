@@ -19,14 +19,29 @@ By treating issues as files and directory paths as states, `did` allows develope
 
 ## Software Factories & Lifecycle Hooks
 
-In `did`, any directory in `.did/` can contain a `.hooks/` directory with hook scripts named after CLI subcommands (`add`, `show`, `status`, `done`, `test`, `link`, `mv`, `rm`, `help`).
+In `did`, any directory in `.did/` can contain a `.hooks/` directory with hook scripts named after CLI subcommands (`add`, `show`, `status`, `done`, `test`, `link`, `mv`, `rm`, `query`, `help`).
 
 When a `did` subcommand executes:
 1. **Hook Discovery**: `did` traverses from the target path up to `.did/` looking for matching `.hooks/<cmd>` files.
 2. **Hook Execution**: If executable, hooks run before the subcommand completes, receiving context via environment variables (`DID_EVENT`, `DID_TARGET`, `DID_DEST`, `DID_OLD`, `DID_NEW`, `DID_REPO_ROOT`, `DID_STATE_DIR`).
 3. **Quality Gates**: If a hook exits with a non-zero exit code, `did` aborts the operation.
 
-This allows defining local factory workflows—for example, requiring issue refinement tagging before moving issues to `implement/`, or enforcing unit tests and state sanity checks when running `did test`.
+### Supported Lifecycle Hooks
+
+| Hook | CLI Trigger | Description |
+| :--- | :--- | :--- |
+| `add` | `did add <PATH>` | Executed during task creation before creating file. |
+| `show` | `did show <PATH>` | Executed during task display to output guidelines or context. |
+| `status` | `did status [PATH]` | Executed before status listing. |
+| `done` | `did done <PATH>` | Executed before resolving a task. |
+| `link` | `did link <TARGET> <DEST>` | Executed before symlink creation. |
+| `mv` | `did mv <OLD> <NEW>` | Executed before moving or renaming tasks. |
+| `rm` | `did rm <PATH>` | Executed before deleting task files or directories. |
+| `query` | `did query <QUERY>` | Executed before searching tasks and content. |
+| `test` | `did test` | Executed during repository health check. |
+| `help` | `did help [TOPIC]` | Executed when invoking help or running without subcommands to display way-of-working instructions. |
+
+This allows defining local factory workflows—for example, requiring issue refinement tagging before moving issues to `implement/`, enforcing unit tests when running `did test`, or outputting way-of-working instructions when running `did help`.
 
 ## Installation
 
