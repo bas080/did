@@ -9,11 +9,10 @@ Replaces simple substring matching in `did query` with fuzzy search and relevanc
 3. **`skim`**: Rust implementation of fzf fuzzy finder logic.
 4. **`tantivy`**: Full-text search engine library (Lucene alternative in Rust) for indexed queries.
 
+## Decision
+Integrate `fuzzy-matcher` for `did query` to provide typo-tolerant, relevance-ranked search while maintaining a lean binary.
+
 ## Recommended Approach
-Integrate `fuzzy-matcher` or `nucleo` for `did query`:
+Integrate `fuzzy-matcher` for `did query`:
 - Ranks search results by relevance score (path matches + header matches + content matches).
 - Allows typo-tolerant matching (e.g. `did query authjwt` matches `backend/auth/jwt.md`).
-
-
-## Open Questions for Refinement (@bas080)
-1. @bas080 Which fuzzy matching crate (`nucleo`, `fuzzy-matcher`, `skim`) is preferred for `did query` integration?
