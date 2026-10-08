@@ -305,13 +305,22 @@ fn make_skin() -> MadSkin {
         MadSkin::default_dark()
     };
 
+    // Ensure all headings are left-aligned
+    for header in &mut skin.headers {
+        header.align = termimad::Alignment::Left;
+    }
+
     // Rainbow Unicorn Palette
     skin.headers[0].set_fg(Color::AnsiValue(205)); // # Header 1: Hot Pink
     skin.headers[1].set_fg(Color::AnsiValue(51));  // ## Header 2: Neon Cyan
     skin.headers[2].set_fg(Color::AnsiValue(226)); // ### Header 3: Bright Yellow
     skin.bold.set_fg(Color::AnsiValue(46));        // **Bold**: Neon Green
     skin.italic.set_fg(Color::AnsiValue(183));     // *Italic*: Lavender
-    skin.inline_code.set_fg(Color::AnsiValue(141)); // `Code`: Violet
+
+    // High-contrast inline codeblock (no background, bright magenta foreground)
+    skin.inline_code.set_fg(Color::AnsiValue(201)); // `Code`: Bright Magenta
+    skin.inline_code.set_bg(Color::Reset);
+
     skin.bullet.set_fg(Color::AnsiValue(208));     // - Bullet: Pastel Coral
     skin.quote_mark.set_fg(Color::AnsiValue(37));  // > Quote: Dark Cyan
     skin

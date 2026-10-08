@@ -44,7 +44,7 @@ pub fn run(repo_opt: Option<Repo>, command: Commands, global_all: bool) -> ExitC
             };
             cmd_add(&repo, &path, message)
         }
-        Commands::Link { target, dest } => {
+        Commands::Blocks { target, dest } => {
             let repo = match require_repo(repo_opt) {
                 Ok(r) => r,
                 Err(code) => return code,
@@ -65,12 +65,12 @@ pub fn run(repo_opt: Option<Repo>, command: Commands, global_all: bool) -> ExitC
             };
             cmd_rm(&repo, &path, recursive)
         }
-        Commands::Status { path, tree } => {
+        Commands::Status { path, tree, blocked } => {
             let repo = match require_repo(repo_opt) {
                 Ok(r) => r,
                 Err(code) => return code,
             };
-            cmd_status(&repo, path.as_deref(), tree, global_all)
+            cmd_status(&repo, path.as_deref(), tree, blocked, global_all)
         }
         Commands::Query { query, path, line_number } => {
             let repo = match require_repo(repo_opt) {
@@ -501,7 +501,7 @@ fn should_visit_entry(entry: &walkdir::DirEntry) -> bool {
     true
 }
 
-fn cmd_status(repo: &Repo, raw_path: Option<&Path>, tree: bool, all: bool) -> ExitCode {
+fn cmd_status(repo: &Repo, raw_path: Option<&Path>, tree: bool, only_blocked: bool, all: bool) -> ExitCode {
     let root_path = match raw_path {
         Some(p) => repo.resolve_path(p),
         None => {
@@ -570,7 +570,9 @@ fn cmd_status(repo: &Repo, raw_path: Option<&Path>, tree: bool, all: bool) -> Ex
                 blocked_count += 1;
             }
 
-            let include_in_output = if all {
+            let include_in_output = if only_blocked {
+                is_blocked
+            } else if all {
                 true
             } else {
                 !is_hidden && !is_blocked
@@ -592,9 +594,15 @@ fn cmd_status(repo: &Repo, raw_path: Option<&Path>, tree: bool, all: bool) -> Ex
     items.sort_by(|a, b| a.0.cmp(&b.0));
     items.dedup_by(|a, b| a.0 == b.0);
 
+    let empty_msg = if only_blocked {
+        "No blocked tasks found."
+    } else {
+        "No actionable tasks found."
+    };
+
     if tree {
         if items.is_empty() {
-            eprintln!("No actionable tasks found.");
+            eprintln!("{}", empty_msg);
         } else {
             for (rel_path, indicator) in items {
                 println!("{} {}", indicator, rel_path);
@@ -602,7 +610,7 @@ fn cmd_status(repo: &Repo, raw_path: Option<&Path>, tree: bool, all: bool) -> Ex
         }
     } else {
         let results: Vec<String> = items.into_iter().map(|(p, _)| p).collect();
-        print_results_with_limit(results, "No actionable tasks found.");
+        print_results_with_limit(results, empty_msg);
     }
 
     eprintln!("[{} blocked, {} closed]", blocked_count, closed_count);
@@ -1403,7 +1411,7 @@ pub fn cmd_help(repo_opt: Option<&Repo>, topic: Option<&str>) -> ExitCode {
         }
         Some(t) => {
             let t_resolved = match t {
-                "ln" => "link",
+                "ln" | "link" => "blocks",
                 "search" => "query",
                 "move" => "mv",
                 "remove" => "rm",
@@ -1478,24 +1486,6 @@ fn cmd_autocomplete(shell: &str) -> ExitCode {
     ExitCode::SUCCESS
 }
 
-fn extract_issue_title(task_path: &Path) -> String {
-    if let Ok(content) = fs::read_to_string(task_path) {
-        for line in content.lines() {
-            let trimmed = line.trim();
-            if !trimmed.is_empty() {
-                if let Some(header) = trimmed.strip_prefix('#') {
-                    return header.trim_start_matches('#').trim().to_string();
-                }
-                return trimmed.to_string();
-            }
-        }
-    }
-    task_path
-        .file_stem()
-        .unwrap_or_default()
-        .to_string_lossy()
-        .to_string()
-}
 
 fn get_related_limit() -> usize {
     if let Ok(val) = env::var("DID_RELATED_LIMIT") {
@@ -1507,61 +1497,35 @@ fn get_related_limit() -> usize {
 }
 
 fn find_related_items(repo: &Repo, task_path: &Path) -> Vec<String> {
-    let title = extract_issue_title(task_path);
+    let parent_dir = match task_path.parent() {
+        Some(p) => p,
+        None => return Vec::new(),
+    };
+
     let self_rel = repo.relative_display_path(task_path);
-
-    let stop_words = ["the", "a", "an", "and", "or", "in", "on", "at", "to", "for", "of", "with", "is", "are"];
-
-    let query_terms: Vec<String> = title
-        .split_whitespace()
-        .map(|w| w.trim_matches(|c: char| !c.is_alphanumeric()).to_lowercase())
-        .filter(|w| w.len() > 1 && !stop_words.contains(&w.as_str()))
-        .collect();
-
-    if query_terms.is_empty() {
-        return Vec::new();
-    }
-
     let limit = get_related_limit();
     let mut related = Vec::new();
 
-    for entry in WalkDir::new(&repo.did_dir)
-        .into_iter()
-        .filter_entry(should_visit_entry)
-        .filter_map(|e| e.ok())
-    {
-        let path = entry.path();
-        if path == repo.did_dir || path == task_path || is_reserved_hook_file(path) {
-            continue;
-        }
-
-        let is_symlink = entry.path_is_symlink();
-        let is_file = path.is_file();
-
-        if is_file || is_symlink {
-            let file_name = path.file_name().unwrap_or_default().to_string_lossy();
-            if file_name.starts_with('.') {
+    if let Ok(entries) = fs::read_dir(parent_dir) {
+        for entry in entries.flatten() {
+            let p = entry.path();
+            if p == task_path || is_reserved_hook_file(&p) {
                 continue;
             }
 
-            let rel_display = repo.relative_display_path(path);
-            if rel_display == self_rel {
-                continue;
-            }
+            let is_symlink = p.is_symlink();
+            let is_file = p.is_file();
 
-            let lower_rel = rel_display.to_lowercase();
-            let content_lower = if is_file {
-                fs::read_to_string(path).unwrap_or_default().to_lowercase()
-            } else {
-                String::new()
-            };
+            if is_file || is_symlink {
+                let file_name = p.file_name().unwrap_or_default().to_string_lossy();
+                if file_name.starts_with('.') {
+                    continue;
+                }
 
-            let matches = query_terms.iter().any(|term| {
-                lower_rel.contains(term) || content_lower.contains(term)
-            });
-
-            if matches {
-                related.push(rel_display);
+                let rel_display = repo.relative_display_path(&p);
+                if rel_display != self_rel {
+                    related.push(rel_display);
+                }
             }
         }
     }
