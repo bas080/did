@@ -657,6 +657,29 @@ fn is_executable(path: &Path) -> bool {
     false
 }
 
+fn has_shebang_or_binary_header(bytes: &[u8]) -> bool {
+    if bytes.starts_with(b"#!") {
+        return true;
+    }
+    if bytes.starts_with(b"\x7fELF") {
+        return true;
+    }
+    if bytes.starts_with(b"MZ") {
+        return true;
+    }
+    if bytes.len() >= 4 {
+        let magic = &bytes[0..4];
+        if magic == b"\xca\xfe\xba\xbe"
+            || magic == b"\xcf\xfa\xed\xfe"
+            || magic == b"\xfe\xed\xfa\xce"
+            || magic == b"\xce\xfa\xed\xfe"
+        {
+            return true;
+        }
+    }
+    false
+}
+
 fn is_reserved_hook_file(path: &Path) -> bool {
     let stem = path.file_stem().unwrap_or_default().to_string_lossy();
     if matches!(
@@ -1077,11 +1100,20 @@ fn cmd_test(repo: &Repo) -> ExitCode {
             }
         }
 
-        if path.is_file() && !is_executable(path) {
-            if let Ok(content) = fs::read_to_string(path) {
-                if content.starts_with("#!") {
+        if path.is_file() {
+            if !is_executable(path) {
+                if let Ok(content) = fs::read_to_string(path) {
+                    if content.starts_with("#!") {
+                        violations.push(format!(
+                            "File has shebang line but lacks execution permissions: '{}'",
+                            rel_display
+                        ));
+                    }
+                }
+            } else if let Ok(bytes) = fs::read(path) {
+                if !has_shebang_or_binary_header(&bytes) {
                     violations.push(format!(
-                        "File has shebang line but lacks execution permissions: '{}'",
+                        "Executable file lacks shebang line (#!) or binary header: '{}'",
                         rel_display
                     ));
                 }
