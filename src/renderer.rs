@@ -10,6 +10,7 @@ use termimad::{terminal_size, MadSkin};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BoxStyle {
     Hook,           // Red border
+    #[allow(dead_code)]
     TaskContent,    // Cyan border
     AdditionalInfo, // Yellow border
 }
@@ -44,21 +45,6 @@ pub fn should_color() -> bool {
             return true;
         }
     }
-    if let Ok(val) = env::var("DID_COLOR") {
-        if val == "1" || val.eq_ignore_ascii_case("true") {
-            return true;
-        }
-    }
-    if let Ok(val) = env::var("FORCE_COLOR") {
-        if val == "1" || val.eq_ignore_ascii_case("true") {
-            return true;
-        }
-    }
-    if let Ok(val) = env::var("FORCE_COLOR") {
-        if val == "1" || val.eq_ignore_ascii_case("true") {
-            return true;
-        }
-    }
 
     std::io::stdout().is_terminal()
 }
@@ -83,12 +69,22 @@ pub fn should_box() -> bool {
             return true;
         }
     }
+    if let Ok(val) = env::var("DID_COLOR") {
+        if val == "1" || val.eq_ignore_ascii_case("true") {
+            return true;
+        }
+    }
+    if let Ok(val) = env::var("FORCE_COLOR") {
+        if val == "1" || val.eq_ignore_ascii_case("true") {
+            return true;
+        }
+    }
 
     std::io::stdout().is_terminal()
 }
 
-/// Highlights syntax in codeblocks and wraps them in a styled border box.
-pub fn highlight_and_box_codeblocks(md: &str, max_width: usize) -> String {
+/// Highlights syntax in codeblocks without border boxes, adding extra padding lines above and below.
+pub fn highlight_and_box_codeblocks(md: &str, _max_width: usize) -> String {
     let ps = SyntaxSet::load_defaults_newlines();
     let ts = ThemeSet::load_defaults();
 
@@ -111,9 +107,6 @@ pub fn highlight_and_box_codeblocks(md: &str, max_width: usize) -> String {
         .or_else(|| ts.themes.values().next());
 
     let use_color = should_color();
-    let border_color = if use_color { "\x1b[38;5;244m" } else { "" };
-    let reset = if use_color { "\x1b[0m" } else { "" };
-
     let mut result = String::new();
     let lines: Vec<&str> = md.lines().collect();
     let mut i = 0;
@@ -146,21 +139,8 @@ pub fn highlight_and_box_codeblocks(md: &str, max_width: usize) -> String {
                 None
             };
 
-            let box_width = max_width.saturating_sub(2).max(20);
-            let inner_width = box_width.saturating_sub(4);
-
-            let mut top = String::new();
-            top.push_str("╭─ ");
-            let lang_label = if lang_token.is_empty() { "code" } else { lang_token };
-            top.push_str(lang_label);
-            top.push(' ');
-            let top_vis = unicode_width::UnicodeWidthStr::width(top.as_str());
-            if top_vis < box_width.saturating_sub(1) {
-                top.push_str(&"─".repeat(box_width.saturating_sub(1).saturating_sub(top_vis)));
-            }
-            top.push('╮');
-
-            result.push_str(&format!("{}{}{}\n", border_color, top, reset));
+            // Padding line above codeblock
+            result.push('\n');
 
             for code_line in code_lines {
                 let formatted_line = if let Some(ref mut highlighter) = h {
@@ -174,17 +154,13 @@ pub fn highlight_and_box_codeblocks(md: &str, max_width: usize) -> String {
                     code_line.to_string()
                 };
 
-                let vis_len = visible_width(&formatted_line);
-                let padding = inner_width.saturating_sub(vis_len);
-
-                result.push_str(&format!(
-                    "{}│{} {} {}{}│{}\n",
-                    border_color, reset, formatted_line, " ".repeat(padding), border_color, reset
-                ));
+                result.push_str("  ");
+                result.push_str(&formatted_line);
+                result.push('\n');
             }
 
-            let bottom = format!("╰{}╯", "─".repeat(box_width.saturating_sub(2)));
-            result.push_str(&format!("{}{}{}\n", border_color, bottom, reset));
+            // Padding line below codeblock
+            result.push('\n');
         } else {
             result.push_str(line);
             result.push('\n');
@@ -318,7 +294,7 @@ fn visible_width(s: &str) -> usize {
     width
 }
 
-/// Constructs a customized `MadSkin` based on the configured theme.
+/// Constructs a customized `MadSkin` with a vibrant Rainbow Unicorn color palette.
 fn make_skin() -> MadSkin {
     let theme_var = env::var("DID_THEME").unwrap_or_default().to_lowercase();
     let is_light = theme_var == "light" || theme_var == "github";
@@ -329,12 +305,14 @@ fn make_skin() -> MadSkin {
         MadSkin::default_dark()
     };
 
-    skin.set_headers_fg(Color::Yellow);
-    skin.bold.set_fg(Color::Cyan);
-    skin.italic.set_fg(Color::Magenta);
-    skin.code_block.set_fg(Color::Green);
-    skin.inline_code.set_fg(Color::Green);
-    skin.bullet.set_fg(Color::Yellow);
-    skin.quote_mark.set_fg(Color::DarkCyan);
+    // Rainbow Unicorn Palette
+    skin.headers[0].set_fg(Color::AnsiValue(205)); // # Header 1: Hot Pink
+    skin.headers[1].set_fg(Color::AnsiValue(51));  // ## Header 2: Neon Cyan
+    skin.headers[2].set_fg(Color::AnsiValue(226)); // ### Header 3: Bright Yellow
+    skin.bold.set_fg(Color::AnsiValue(46));        // **Bold**: Neon Green
+    skin.italic.set_fg(Color::AnsiValue(183));     // *Italic*: Lavender
+    skin.inline_code.set_fg(Color::AnsiValue(141)); // `Code`: Violet
+    skin.bullet.set_fg(Color::AnsiValue(208));     // - Bullet: Pastel Coral
+    skin.quote_mark.set_fg(Color::AnsiValue(37));  // > Quote: Dark Cyan
     skin
 }
