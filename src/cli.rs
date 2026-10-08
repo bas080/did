@@ -37,6 +37,10 @@ pub enum Commands {
         /// Display tasks in a tree structure
         #[arg(short = 't', long = "tree")]
         tree: bool,
+
+        /// List blocked tasks
+        #[arg(short = 'b', long = "blocked")]
+        blocked: bool,
     },
 
     /// Search task paths and task file contents for QUERY
@@ -76,8 +80,8 @@ pub enum Commands {
     },
 
     /// Symlink TARGET into DEST directory using TARGET's basename
-    #[command(alias = "ln")]
-    Link {
+    #[command(alias = "link", alias = "ln")]
+    Blocks {
         /// Target path
         target: PathBuf,
         /// Destination directory path

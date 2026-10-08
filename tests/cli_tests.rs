@@ -61,6 +61,12 @@ fn test_add_and_show() {
     assert!(!success_show_dir);
     assert!(stderr_show_dir.contains("requires a task file, got directory"));
     assert!(stderr_show_dir.contains("Use 'did status backend' instead"));
+
+    // Status -b lists blocked tasks
+    did_cmd(root, &["add", "backend/auth/sub/c.md", "-m", "Task C"]);
+    let (success_b, stdout_b, _) = did_cmd(root, &["status", "-b"]);
+    assert!(success_b);
+    assert!(stdout_b.contains("backend/auth/jwt.md"));
 }
 
 #[test]
