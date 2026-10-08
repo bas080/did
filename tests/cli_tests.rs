@@ -1425,3 +1425,41 @@ fn test_markdown_renderer_box_rendering_and_color_optout() {
     assert!(s_didc0);
     assert!(!stdout_didc0.contains("╭─"));
 }
+
+#[test]
+fn test_codeblock_syntax_highlighting_and_boxing() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    fs::create_dir_all(root.join(".did")).unwrap();
+    did_cmd(
+        root,
+        &[
+            "add",
+            "tryit.md",
+            "-m",
+            "# Lovely\n\n```html\n<body>\n  <i>Hi</i>\n</body>\n```",
+        ],
+    );
+
+    // With FORCE_COLOR=1, the task file is rendered inside a Cyan box and codeblock is syntax-highlighted and boxed
+    let (s_force, stdout_force, _) =
+        did_cmd_env(root, &["show", "tryit.md"], &[("FORCE_COLOR", "1")]);
+    assert!(s_force);
+    assert!(stdout_force.contains("╭─ tryit.md"));
+    assert!(stdout_force.contains("╭─ html"));
+    assert!(stdout_force.contains("body"));
+    assert!(stdout_force.contains("Hi"));
+    assert!(stdout_force.contains("╰─"));
+
+    // With NO_COLOR=1, unboxed raw markdown is returned
+    let (s_nocolor, stdout_nocolor, _) = did_cmd_env(
+        root,
+        &["show", "tryit.md"],
+        &[("FORCE_COLOR", "1"), ("NO_COLOR", "1")],
+    );
+    assert!(s_nocolor);
+    assert!(stdout_nocolor.contains("tryit.md"));
+    assert!(stdout_nocolor.contains("```html"));
+    assert!(!stdout_nocolor.contains("╭─"));
+}
