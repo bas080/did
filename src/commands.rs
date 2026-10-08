@@ -839,16 +839,8 @@ fn run_ancestor_hooks(repo: &Repo, start_path: &Path, env_spec: HookEnv) -> Resu
                                 println!();
                             }
                             if crate::renderer::should_color() {
-                                let lines: Vec<String> = stdout_str
-                                    .lines()
-                                    .map(|line| format!("> {}", line))
-                                    .collect();
-                                let boxed = format!(
-                                    "> **Ancestor Hook Output (`{}`):**\n>\n{}\n",
-                                    env_spec.event,
-                                    lines.join("\n")
-                                );
-                                crate::renderer::render_markdown(&boxed);
+                                let hook_rel = repo.relative_display_path(&hook_p);
+                                crate::renderer::draw_box(&hook_rel, &stdout_str, crate::renderer::BoxStyle::Hook);
                             } else if stdout_str.ends_with('\n') {
                                 print!("{}", stdout_str);
                             } else {
@@ -877,7 +869,14 @@ fn run_ancestor_hooks(repo: &Repo, start_path: &Path, env_spec: HookEnv) -> Resu
                 if printed_any {
                     println!();
                 }
-                print_file_content(repo, &hook_p);
+                if crate::renderer::should_color() {
+                    let hook_rel = repo.relative_display_path(&hook_p);
+                    if let Ok(content) = fs::read_to_string(&hook_p) {
+                        crate::renderer::draw_box(&hook_rel, &content, crate::renderer::BoxStyle::Hook);
+                    }
+                } else {
+                    print_file_content(repo, &hook_p);
+                }
                 printed_any = true;
             }
         }
@@ -944,9 +943,17 @@ fn cmd_show(repo: &Repo, raw_path: &Path, _all: bool) -> ExitCode {
 
     let blocking = get_unresolved_blocking_items(repo, &target_path);
     if !blocking.is_empty() {
-        eprintln!("[Blocked by unresolved sub-items:]");
-        for item in blocking {
-            eprintln!("  - {}", item);
+        if crate::renderer::should_color() {
+            let mut block_md = String::from("### Blocked by unresolved sub-items:\n\n");
+            for item in &blocking {
+                block_md.push_str(&format!("* {}\n", item));
+            }
+            crate::renderer::draw_box("Warning: Task Blocked", &block_md, crate::renderer::BoxStyle::AdditionalInfo);
+        } else {
+            eprintln!("[Blocked by unresolved sub-items:]");
+            for item in blocking {
+                eprintln!("  - {}", item);
+            }
         }
     }
 
@@ -1428,41 +1435,25 @@ fn cmd_autocomplete(shell: &str) -> ExitCode {
     ExitCode::SUCCESS
 }
 
-fn get_codeblock_lang(path: &Path) -> String {
-    match path.extension().and_then(|e| e.to_str()) {
-        Some("md") | Some("markdown") => "markdown".to_string(),
-        Some("rs") => "rust".to_string(),
-        Some("txt") => "text".to_string(),
-        Some(ext) if !ext.is_empty() => ext.to_lowercase(),
-        _ => "text".to_string(),
-    }
-}
-
-fn format_file_content(repo: &Repo, path: &Path) -> String {
+fn print_file_content(repo: &Repo, path: &Path) {
     let rel = repo.relative_display_path(path);
-    let lang = get_codeblock_lang(path);
-    let mut out = String::new();
-    out.push_str(&rel);
-    out.push('\n');
     match fs::read_to_string(path) {
         Ok(content) => {
-            out.push_str(&format!("```{}\n", lang));
-            out.push_str(&content);
-            if !content.ends_with('\n') {
-                out.push('\n');
+            if crate::renderer::should_color() {
+                crate::renderer::draw_box(&rel, &content, crate::renderer::BoxStyle::TaskContent);
+            } else {
+                println!("{}", rel);
+                if content.ends_with('\n') {
+                    print!("{}", content);
+                } else {
+                    println!("{}", content);
+                }
             }
-            out.push_str("```\n");
         }
         Err(e) => {
             eprintln!("error reading file {}: {}", rel, e);
         }
     }
-    out
-}
-
-fn print_file_content(repo: &Repo, path: &Path) {
-    let formatted = format_file_content(repo, path);
-    crate::renderer::render_markdown(&formatted);
 }
 
 /// Returns a list of unresolved blocking items (relative paths and symlink targets) under child subdirectories of `task_file`.
