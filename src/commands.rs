@@ -1535,15 +1535,13 @@ fn print_file_content(repo: &Repo, path: &Path) {
     let rel = repo.relative_display_path(path);
     match fs::read_to_string(path) {
         Ok(content) => {
-            if crate::renderer::should_box() || crate::renderer::should_color() {
-                crate::renderer::draw_box(&rel, &content, crate::renderer::BoxStyle::TaskContent);
+            println!("{}", rel);
+            if crate::renderer::should_color() {
+                crate::renderer::render_markdown(&content);
+            } else if content.ends_with('\n') {
+                print!("{}", content);
             } else {
-                println!("{}", rel);
-                if content.ends_with('\n') {
-                    print!("{}", content);
-                } else {
-                    println!("{}", content);
-                }
+                println!("{}", content);
             }
         }
         Err(e) => {
@@ -1559,7 +1557,7 @@ fn get_unresolved_blocking_items(repo: &Repo, task_file: &Path) -> Vec<String> {
         None => return Vec::new(),
     };
 
-    let is_root_dir = parent_dir == repo.did_dir;
+    let is_top_category = parent_dir.parent() == Some(&repo.did_dir) || parent_dir == repo.did_dir;
     let task_stem = task_file.file_stem().unwrap_or_default().to_string_lossy();
     let mut items = Vec::new();
 
@@ -1580,7 +1578,7 @@ fn get_unresolved_blocking_items(repo: &Repo, task_file: &Path) -> Vec<String> {
                     if dir_name.starts_with('.') {
                         continue;
                     }
-                    if is_root_dir {
+                    if is_top_category {
                         if dir_name == task_stem {
                             collect_unresolved_in_dir(repo, &p, &mut items);
                         }

@@ -131,6 +131,13 @@ did undone implement/auth/jwt.md
 | `DID_STATUS_LIMIT` | Sets the maximum number of items returned by `did status` or `did query` before displaying a truncation notice on `stderr`. |
 | `DID_LOG_PATH` | Activates XML execution telemetry logging. Relative paths are resolved relative to the parent directory where `.did/` lives. |
 | `DID_DEBUG` | Enables verbose diagnostic logging on `stderr`. |
+| `DID_COLOR` | Controls colored terminal rendering (`1` to force, `0` to disable). |
+| `DID_NO_COLOR` | Disables colored terminal output when set (`1`). |
+| `DID_BOX` | Controls border box containers around extra outputs (`1` to force, `0` to disable). |
+| `DID_NO_BOX` | Disables border box containers when set (`1`), rendering `---` section breaks instead. |
+| `DID_THEME` | Configures markdown and syntax highlighting themes (`dark`, `light`/`github`, `solarized`, `mocha`). |
+| `DID_SYNTAX_THEME` | Overrides syntax highlighting theme specifically (`InspiredGitHub`, `Solarized (dark)`, `base16-ocean.dark`, `base16-mocha.dark`). |
+| `DID_RELATED_LIMIT` | Sets maximum number of related items displayed in `did show` (defaults to `5`). |
 | `EDITOR` | Specifies the text editor to invoke when running `did add PATH` without a `-m` message flag (defaults to `vi`). |
 
 ## Recipes
