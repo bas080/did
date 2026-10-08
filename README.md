@@ -132,6 +132,20 @@ did undone implement/auth/jwt.md
 | `DID_DEBUG` | Enables verbose diagnostic logging on `stderr`. |
 | `EDITOR` | Specifies the text editor to invoke when running `did add PATH` without a `-m` message flag (defaults to `vi`). |
 
+## Recipes
+
+## Recipes
+
+### Automating Quality Gates with Git Hooks
+You can integrate `did` into your Git workflow to enforce quality gates (like running `did test`) before every commit. 
+
+1. Create a `.githooks/pre-commit` script that calls `did test`.
+2. Configure your local repository to use this directory:
+   ```bash
+   git config core.hooksPath .githooks
+   ```
+Now, any commit attempt that violates your `did` health checks will be automatically blocked.
+
 ## License
 
 MIT
