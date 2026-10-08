@@ -1076,6 +1076,30 @@ fn test_did_test_subcommand() {
 }
 
 #[test]
+fn test_did_test_executable_without_shebang_fails() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    fs::create_dir_all(root.join(".did")).unwrap();
+
+    let invalid_script = root.join(".did/.hooks/show");
+    fs::create_dir_all(invalid_script.parent().unwrap()).unwrap();
+    fs::write(&invalid_script, "echo 'No shebang'\n").unwrap();
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(&invalid_script).unwrap().permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&invalid_script, perms).unwrap();
+
+        let (success, _, stderr) = did_cmd(root, &["test"]);
+        assert!(!success);
+        assert!(stderr.contains("Executable file lacks shebang line (#!) or binary header:"));
+    }
+}
+
+#[test]
 fn test_did_rm_and_remove_hook() {
     let dir = tempdir().unwrap();
     let root = dir.path();
