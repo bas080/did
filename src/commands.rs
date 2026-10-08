@@ -836,7 +836,7 @@ fn find_hook_files(ancestor_dir: &Path, event: &str) -> Vec<PathBuf> {
     matches
 }
 
-fn cmd_show(repo: &Repo, raw_path: &Path, all: bool) -> ExitCode {
+fn cmd_show(repo: &Repo, raw_path: &Path, _all: bool) -> ExitCode {
     let target_path = repo.resolve_path(raw_path);
 
     let meta = match fs::symlink_metadata(&target_path) {
@@ -860,15 +860,11 @@ fn cmd_show(repo: &Repo, raw_path: &Path, all: bool) -> ExitCode {
     }
 
     let blocking = get_unresolved_blocking_items(repo, &target_path);
-    if !all && !blocking.is_empty() {
-        eprintln!(
-            "error: task '{}' is blocked by unresolved sub-items:",
-            repo.relative_display_path(&target_path)
-        );
+    if !blocking.is_empty() {
+        eprintln!("[Blocked by unresolved sub-items:]");
         for item in blocking {
             eprintln!("  - {}", item);
         }
-        return ExitCode::FAILURE;
     }
 
     let target_rel = repo.relative_display_path(&target_path);
