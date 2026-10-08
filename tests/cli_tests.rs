@@ -156,6 +156,17 @@ fn test_status_and_hierarchy() {
     // Status -a shows resolved task as well
     let (_, stdout_stat_a, _) = did_cmd(root, &["status", "-a"]);
     assert!(stdout_stat_a.contains("backend/auth/sub/.c.md"));
+
+    // Status -t (tree mode) shows actionable task with status indicator - [ ]
+    let (success_tree, stdout_tree, _) = did_cmd(root, &["status", "-t"]);
+    assert!(success_tree);
+    assert!(stdout_tree.contains("- [ ] backend/auth/a.md"));
+    assert!(stdout_tree.contains("- [ ] backend/auth/b.md"));
+
+    // Status -t -a (tree mode with all) shows closed task with - [x]
+    let (success_tree_a, stdout_tree_a, _) = did_cmd(root, &["status", "-t", "-a"]);
+    assert!(success_tree_a);
+    assert!(stdout_tree_a.contains("- [x] backend/auth/sub/.c.md"));
 }
 
 #[test]
@@ -279,20 +290,25 @@ fn test_search_feature() {
     did_cmd(root, &["add", "frontend/login.md", "-m", "Calls JWT auth endpoint"]);
     did_cmd(root, &["add", "docs/notes.md", "-m", "General documentation"]);
 
-    // Search "jwt" matches backend/auth/jwt.md (path) and frontend/login.md (content)
+    // Search "jwt" matches backend/auth/jwt.md (path) and frontend/login.md (content snippet)
     let (success1, stdout1, _) = did_cmd(root, &["search", "jwt"]);
     assert!(success1);
-    assert_eq!(stdout1.trim(), "backend/auth/jwt.md\nfrontend/login.md");
+    assert_eq!(stdout1.trim(), "backend/auth/jwt.md\nfrontend/login.md: Calls JWT auth endpoint");
+
+    // Search "jwt" with -n / --line-number
+    let (success_n, stdout_n, _) = did_cmd(root, &["search", "-n", "jwt"]);
+    assert!(success_n);
+    assert_eq!(stdout_n.trim(), "backend/auth/jwt.md\nfrontend/login.md:1: Calls JWT auth endpoint");
 
     // Case-insensitive search "TOKEN"
     let (success2, stdout2, _) = did_cmd(root, &["search", "TOKEN"]);
     assert!(success2);
-    assert_eq!(stdout2.trim(), "backend/auth/jwt.md");
+    assert_eq!(stdout2.trim(), "backend/auth/jwt.md: Token verification");
 
     // Search with subtree path argument
     let (success3, stdout3, _) = did_cmd(root, &["search", "jwt", "frontend"]);
     assert!(success3);
-    assert_eq!(stdout3.trim(), "frontend/login.md");
+    assert_eq!(stdout3.trim(), "frontend/login.md: Calls JWT auth endpoint");
 
     // Search with -a flag and blocked items
     did_cmd(root, &["add", "backend/auth/jwt/subtask.md", "-m", "JWT helper task"]);

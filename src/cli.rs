@@ -33,6 +33,10 @@ pub enum Commands {
     Status {
         /// Optional subtree path
         path: Option<PathBuf>,
+
+        /// Display tasks in a tree structure
+        #[arg(short = 't', long = "tree")]
+        tree: bool,
     },
 
     /// Search task paths and task file contents for QUERY
@@ -43,6 +47,10 @@ pub enum Commands {
 
         /// Optional subtree path
         path: Option<PathBuf>,
+
+        /// Print 1-based line numbers for matching content snippets
+        #[arg(short = 'n', long = "line-number")]
+        line_number: bool,
     },
 
     /// Print task contents at PATH (requires sub-items done unless -a)
