@@ -5,7 +5,8 @@ use std::path::PathBuf;
 #[command(
     name = "did",
     version = "0.1.0",
-    about = "filesystem-native issue tracker with hooks for defining local software factories"
+    about = "filesystem-native issue tracker with hooks for defining local software factories",
+    disable_help_subcommand = true
 )]
 pub struct Cli {
     /// Include resolved (hidden) tasks and blocked nodes
@@ -93,6 +94,12 @@ pub enum Commands {
 
     /// Validate repository health and structure
     Test,
+
+    /// Print help information, topic guides, or run help lifecycle hooks
+    Help {
+        /// Optional topic or subcommand name
+        topic: Option<String>,
+    },
 
     /// Generate shell completion scripts (e.g., bash)
     #[command(hide = true)]

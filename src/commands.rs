@@ -107,6 +107,7 @@ pub fn run(repo_opt: Option<Repo>, command: Commands, global_all: bool) -> ExitC
             };
             cmd_test(&repo)
         }
+        Commands::Help { topic } => cmd_help(repo_opt.as_ref(), topic.as_deref()),
         Commands::Autocomplete { shell } => cmd_autocomplete(&shell),
     }
 }
@@ -1101,6 +1102,94 @@ fn cmd_test(repo: &Repo) -> ExitCode {
         println!(".did state directory is clean.");
         ExitCode::SUCCESS
     }
+}
+
+pub fn cmd_help(repo_opt: Option<&Repo>, topic: Option<&str>) -> ExitCode {
+    let mut printed_hook = false;
+    if let Some(repo) = repo_opt {
+        let current_dir = env::current_dir().unwrap_or_else(|_| repo.did_dir.clone());
+        let root_path = if current_dir.starts_with(&repo.did_dir) {
+            current_dir
+        } else {
+            repo.did_dir.clone()
+        };
+        let target_rel = repo.relative_display_path(&root_path);
+        if let Ok(printed) = run_ancestor_hooks(
+            repo,
+            &root_path,
+            HookEnv {
+                event: "help",
+                target: Some(&target_rel),
+                dest: None,
+                old: None,
+                new: None,
+            },
+        ) {
+            printed_hook = printed;
+        }
+    }
+
+    if printed_hook {
+        println!();
+    }
+
+    match topic {
+        None => {
+            use clap::CommandFactory;
+            let _ = crate::cli::Cli::command().print_help();
+            println!();
+        }
+        Some("hooks") => {
+            print_hooks_topic_help();
+        }
+        Some(t) => {
+            use clap::CommandFactory;
+            let mut cmd = crate::cli::Cli::command();
+            if let Some(sub) = cmd.find_subcommand_mut(t) {
+                let _ = sub.print_help();
+                println!();
+            } else {
+                eprintln!("error: unrecognized help topic or subcommand '{}'", t);
+                return ExitCode::FAILURE;
+            }
+        }
+    }
+
+    ExitCode::SUCCESS
+}
+
+fn print_hooks_topic_help() {
+    println!(
+        "# Lifecycle Hooks Documentation (`did help hooks`)\n\n\
+        In `did`, any directory in `.did/` can contain a `.hooks/` directory with hook scripts\n\
+        or static files named after lifecycle events.\n\n\
+        ## Hook Discovery & Precedence\n\
+        When a `did` command executes, `did` checks ancestor directories top-down from the `.did/` root\n\
+        to the target task directory for matching `.hooks/<event>` files.\n\n\
+        ## Hook Execution Rules\n\
+        - Executable scripts (Unix `0o111` mode): `did` executes the script and displays stdout/stderr.\n\
+          A non-zero exit code aborts the operation.\n\
+        - Non-executable files: `did` prints the relative path header and static text content.\n\n\
+        ## Environment Variables\n\
+        Executable hooks receive contextual state via environment variables:\n\
+        - `DID_EVENT`: Lifecycle event name (e.g. 'show', 'status', 'add', 'help')\n\
+        - `DID_TARGET`: Target relative path, if applicable\n\
+        - `DID_DEST`: Destination directory relative path for link commands\n\
+        - `DID_OLD` / `DID_NEW`: Old and new relative paths for move commands\n\
+        - `DID_REPO_ROOT`: Absolute path to repository root\n\
+        - `DID_STATE_DIR`: Absolute path to `.did` state directory\n\n\
+        ## Supported Lifecycle Hooks\n\
+        - `add`: Executed during `did add <PATH>`\n\
+        - `show`: Executed during `did show <PATH>`\n\
+        - `status`: Executed during `did status [PATH]`\n\
+        - `done`: Executed before task completion in `did done <PATH>`\n\
+        - `link`: Executed during `did link <TARGET> <DEST>`\n\
+        - `mv`: Executed before moving/renaming in `did mv <OLD> <NEW>`\n\
+        - `rm`: Executed before removing in `did rm <PATH>`\n\
+        - `query`: Executed during search in `did query <QUERY>`\n\
+        - `test`: Executed during repository health check in `did test`\n\
+        - `help`: Executed during `did help [TOPIC]`"
+    );
 }
 
 fn cmd_autocomplete(shell: &str) -> ExitCode {

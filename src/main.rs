@@ -2,7 +2,7 @@ mod cli;
 mod commands;
 mod repo;
 
-use clap::{CommandFactory, Parser};
+use clap::Parser;
 use cli::Cli;
 use repo::Repo;
 use std::env;
@@ -25,9 +25,8 @@ fn main() -> ExitCode {
             (name, code)
         }
         None => {
-            let _ = Cli::command().print_help();
-            println!();
-            ("help".to_string(), ExitCode::SUCCESS)
+            let code = commands::cmd_help(repo_opt.as_ref(), None);
+            ("help".to_string(), code)
         }
     };
 

@@ -1138,3 +1138,66 @@ fn test_non_executable_done_hook_reminds() {
     assert!(stdout.contains("REMINDER: Mark undone if incomplete"));
     assert!(root.join(".did/.task.md").is_file());
 }
+
+#[test]
+fn test_help_command_and_hook() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    fs::create_dir_all(root.join(".did")).unwrap();
+
+    let hook = root.join(".did/.hooks/help");
+    fs::create_dir_all(hook.parent().unwrap()).unwrap();
+    fs::write(&hook, "Static Help Guidance").unwrap();
+
+    let (success, stdout, _) = did_cmd(root, &["help"]);
+    assert!(success);
+    assert!(stdout.contains("Static Help Guidance"));
+    assert!(stdout.contains("Usage:"));
+}
+
+#[test]
+fn test_help_topic_hooks() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    let (success, stdout, _) = did_cmd(root, &["help", "hooks"]);
+    assert!(success);
+    assert!(stdout.contains("# Lifecycle Hooks Documentation"));
+    assert!(stdout.contains("Supported Lifecycle Hooks"));
+    assert!(stdout.contains("help"));
+}
+
+#[test]
+fn test_help_topic_subcommand() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    let (success, stdout, _) = did_cmd(root, &["help", "status"]);
+    assert!(success);
+    assert!(stdout.contains("List actionables"));
+}
+
+#[test]
+fn test_executable_help_hook() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    fs::create_dir_all(root.join(".did")).unwrap();
+
+    let hook = root.join(".did/.hooks/help");
+    fs::create_dir_all(hook.parent().unwrap()).unwrap();
+    fs::write(&hook, "#!/bin/sh\necho 'CUSTOM HELP HOOK RUNNING'\n").unwrap();
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(&hook).unwrap().permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&hook, perms).unwrap();
+
+        let (success, stdout, _) = did_cmd(root, &["help"]);
+        assert!(success);
+        assert!(stdout.contains("CUSTOM HELP HOOK RUNNING"));
+    }
+}
