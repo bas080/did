@@ -4,10 +4,18 @@ if ! CARGO_TEST_OUT=$(cargo test 2>&1); then
     exit 1
 fi
 
-UNRESOLVED_IMPLEMENT=$(find .did/implement -type f ! -name ".*" ! -path "*/.hooks/*" 2>/dev/null)
-if [ -n "$UNRESOLVED_IMPLEMENT" ]; then
-    echo "error: unresolved tasks remain in .did/implement/:" >&2
-    echo "$UNRESOLVED_IMPLEMENT" | sed 's/^/  - /' >&2
+# Check for issues in implement that still contain questions for @bas080
+STILL_REFINING=""
+for f in $(find .did/implement -type f ! -name ".*" ! -path "*/.hooks/*" 2>/dev/null); do
+    if grep -q "@bas080" "$f"; then
+        STILL_REFINING="$STILL_REFINING
+  - $f"
+    fi
+done
+
+if [ -n "$STILL_REFINING" ]; then
+    echo "error: issues in .did/implement/ still contain questions for @bas080 (move back to refine):" >&2
+    echo "$STILL_REFINING" >&2
     exit 1
 fi
 

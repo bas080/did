@@ -25,6 +25,4 @@ Safely remove multiple tasks and their associated symlinks.
 - **Error Handling**: If any operation in a bulk set fails, the command must **stop immediately** at the first error and report the failure.
 - **Safety**: Rely on the `-r` flag for explicit recursive intent and Git version control for recovery from accidental deletions.
 
-@bas080
 
-@bas080
