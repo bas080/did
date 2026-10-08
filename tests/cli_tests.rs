@@ -296,13 +296,13 @@ fn test_search_feature() {
 
     // Search with -a flag and blocked items
     did_cmd(root, &["add", "backend/auth/jwt/subtask.md", "-m", "JWT helper task"]);
-    // backend/auth/jwt.md is now blocked by jwt/subtask.md
+    // backend/auth/jwt/index.md is now blocked by jwt/subtask.md
     let (_, stdout_no_a, stderr_no_a) = did_cmd(root, &["search", "TOKEN"]);
     assert_eq!(stdout_no_a.trim(), "");
     assert!(stderr_no_a.contains("No matching tasks found."));
 
     let (_, stdout_with_a, _) = did_cmd(root, &["search", "TOKEN", "-a"]);
-    assert!(stdout_with_a.contains("backend/auth/jwt.md"));
+    assert!(stdout_with_a.contains("backend/auth/jwt/index.md"));
 
     // Status limit via env var DID_STATUS_LIMIT
     let (success_lim, stdout_lim, stderr_lim) = did_cmd_env(
@@ -346,16 +346,16 @@ fn test_debug_logging() {
 
     let (_, _, stderr_show) = did_cmd_env(
         root,
-        &["show", "backend/auth/jwt.md"],
+        &["show", "backend/auth/jwt/index.md"],
         &[("DID_DEBUG", "1")],
     );
-    assert!(stderr_show.contains("[DEBUG] Blocking check for 'backend/auth/jwt.md': 1 unresolved child sub-items found"));
+    assert!(stderr_show.contains("[DEBUG] Blocking check for 'backend/auth/jwt/index.md': 1 unresolved child sub-items found"));
 
     did_cmd(root, &["done", "backend/auth/jwt/sub.md"]);
 
     let (success_done, _, stderr_done) = did_cmd_env(
         root,
-        &["done", "backend/auth/jwt.md"],
+        &["done", "backend/auth/jwt/index.md"],
         &[("DID_DEBUG", "1")],
     );
     assert!(success_done);
@@ -567,6 +567,73 @@ fn test_executable_add_hook_abort() {
         assert!(!success);
         assert!(!root.join(".did/blocked_task.md").exists());
     }
+}
+
+#[test]
+fn test_auto_convert_file_to_directory() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    fs::create_dir_all(root.join(".did")).unwrap();
+
+    // Create parent task parent.md
+    did_cmd(root, &["add", "parent.md", "-m", "Parent task content"]);
+    did_cmd(root, &["link", "parent.md", "refs"]);
+
+    // Add child task under parent.md -> should convert parent.md into directory parent/ containing index.md
+    let (success, _, _) = did_cmd(root, &["add", "parent/child.md", "-m", "Child task content"]);
+    assert!(success);
+
+    assert!(root.join(".did/parent").is_dir());
+    assert!(root.join(".did/parent/index.md").is_file());
+    assert_eq!(
+        fs::read_to_string(root.join(".did/parent/index.md")).unwrap(),
+        "Parent task content\n"
+    );
+    assert!(root.join(".did/parent/child.md").is_file());
+
+    // Symlink in refs should be updated to point to parent/index.md
+    let symlink = root.join(".did/refs/parent.md");
+    assert!(symlink.is_symlink());
+    let target = fs::read_link(&symlink).unwrap();
+    assert_eq!(target, Path::new("../parent/index.md"));
+}
+
+#[test]
+fn test_add_fallback_header_when_empty() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    fs::create_dir_all(root.join(".did")).unwrap();
+
+    // my_editor touches file without adding content
+    let script = root.join("empty_editor.sh");
+    fs::write(&script, "#!/bin/sh\nexit 0\n").unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(&script).unwrap().permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&script, perms).unwrap();
+    }
+
+    let (success, _, _) = did_cmd_env(
+        root,
+        &["add", "features/auth-fix.md"],
+        &[("EDITOR", script.to_str().unwrap())],
+    );
+    assert!(success);
+
+    let task_path = root.join(".did/features/auth-fix.md");
+    assert!(task_path.is_file());
+    let content = fs::read_to_string(task_path).unwrap();
+    assert_eq!(content, "# auth-fix\n");
+
+    // Also test adding with empty -m string
+    let (success_msg, _, _) = did_cmd(root, &["add", "features/billing.md", "-m", "   "]);
+    assert!(success_msg);
+    let content_msg = fs::read_to_string(root.join(".did/features/billing.md")).unwrap();
+    assert_eq!(content_msg, "# billing\n");
 }
 
 #[test]
@@ -849,6 +916,27 @@ fn test_show_non_existent_file_fails() {
     let (success, _, stderr) = did_cmd(root, &["show", "non_existent.md"]);
     assert!(!success);
     assert!(stderr.contains("path does not exist"));
+}
+
+#[test]
+fn test_done_recursive_directory() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    fs::create_dir_all(root.join(".did")).unwrap();
+
+    did_cmd(root, &["add", "feature/a.md", "-m", "Task A"]);
+    did_cmd(root, &["add", "feature/b.md", "-m", "Task B"]);
+    did_cmd(root, &["add", "feature/sub/c.md", "-m", "Task C"]);
+
+    let (success, stdout, stderr) = did_cmd(root, &["done", "-r", "feature"]);
+    println!("stdout: {}", stdout);
+    println!("stderr: {}", stderr);
+    assert!(success);
+
+    assert!(root.join(".did/feature/.a.md").is_file());
+    assert!(root.join(".did/feature/.b.md").is_file());
+    assert!(root.join(".did/feature/sub/.c.md").is_file());
 }
 
 #[test]
