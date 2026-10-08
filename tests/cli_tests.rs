@@ -1399,16 +1399,24 @@ fn test_markdown_renderer_box_rendering_and_color_optout() {
     fs::create_dir_all(root.join(".did")).unwrap();
     did_cmd(root, &["add", "task.md", "-m", "# Title"]);
 
-    // With FORCE_COLOR=1, color rendering & box borders are drawn
-    let (s_force, stdout_force, _) = did_cmd_env(root, &["show", "task.md"], &[("FORCE_COLOR", "1")]);
+    // With DID_BOX=1 & FORCE_COLOR=1, color rendering & box borders are drawn
+    let (s_force, stdout_force, _) = did_cmd_env(root, &["show", "task.md"], &[("DID_BOX", "1"), ("FORCE_COLOR", "1")]);
     assert!(s_force);
     assert!(stdout_force.contains("╭─ task.md"));
     assert!(stdout_force.contains("╰─"));
     assert!(stdout_force.contains("\x1b[36m")); // Cyan box border
 
-    // With NO_COLOR=1, color rendering & boxes are opted out
+    // With DID_NO_BOX=1 & FORCE_COLOR=1, sections are separated with ---
+    let (s_nobox, stdout_nobox, _) =
+        did_cmd_env(root, &["show", "task.md"], &[("FORCE_COLOR", "1"), ("DID_NO_BOX", "1")]);
+    assert!(s_nobox);
+    assert!(stdout_nobox.contains("task.md"));
+    assert!(!stdout_nobox.contains("╭─"));
+    assert!(stdout_nobox.contains("―")); // Termimad horizontal rule for ---
+
+    // With NO_COLOR=1 & DID_NO_BOX=1, unboxed plain text is returned
     let (s_nocolor, stdout_nocolor, _) =
-        did_cmd_env(root, &["show", "task.md"], &[("FORCE_COLOR", "1"), ("NO_COLOR", "1")]);
+        did_cmd_env(root, &["show", "task.md"], &[("NO_COLOR", "1"), ("DID_NO_BOX", "1")]);
     assert!(s_nocolor);
     assert!(stdout_nocolor.contains("task.md"));
     assert!(!stdout_nocolor.contains("╭─"));
@@ -1444,7 +1452,7 @@ fn test_codeblock_syntax_highlighting_and_boxing() {
 
     // With FORCE_COLOR=1, the task file is rendered inside a Cyan box and codeblock is syntax-highlighted and boxed
     let (s_force, stdout_force, _) =
-        did_cmd_env(root, &["show", "tryit.md"], &[("FORCE_COLOR", "1")]);
+        did_cmd_env(root, &["show", "tryit.md"], &[("DID_BOX", "1"), ("FORCE_COLOR", "1")]);
     assert!(s_force);
     assert!(stdout_force.contains("╭─ tryit.md"));
     assert!(stdout_force.contains("╭─ html"));
@@ -1462,4 +1470,92 @@ fn test_codeblock_syntax_highlighting_and_boxing() {
     assert!(stdout_nocolor.contains("tryit.md"));
     assert!(stdout_nocolor.contains("```html"));
     assert!(!stdout_nocolor.contains("╭─"));
+}
+
+#[test]
+fn test_all_did_environment_variables() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    fs::create_dir_all(root.join(".did")).unwrap();
+
+    did_cmd(root, &["add", "auth/jwt.md", "-m", "# Auth JWT Implementation\nDetails"]);
+    did_cmd(root, &["add", "auth/session.md", "-m", "# Auth Session Management\nDetails"]);
+
+    // 1. DID_STATUS_LIMIT
+    let (s1, stdout1, stderr1) = did_cmd_env(root, &["status"], &[("DID_STATUS_LIMIT", "1")]);
+    assert!(s1);
+    assert_eq!(stdout1.trim().lines().count(), 1);
+    assert!(stderr1.contains("status limit reached"));
+
+    // 2. DID_STATUS_PATH
+    let (s2, stdout2, _) = did_cmd_env(root, &["status"], &[("DID_STATUS_PATH", "auth")]);
+    assert!(s2);
+    assert!(stdout2.contains("auth/jwt.md"));
+
+    // 3. DID_LOG_PATH
+    let log_file = root.join("execution.log");
+    let (s3, _, _) = did_cmd_env(root, &["status"], &[("DID_LOG_PATH", log_file.to_str().unwrap())]);
+    assert!(s3);
+    assert!(log_file.is_file());
+
+    // 4. DID_DEBUG
+    let (s4, _, _stderr4) = did_cmd_env(root, &["status"], &[("DID_DEBUG", "1")]);
+    assert!(s4);
+
+    // 5. DID_COLOR & 6. DID_NO_COLOR
+    let (s5, stdout5, _) = did_cmd_env(root, &["show", "auth/jwt.md"], &[("DID_BOX", "1"), ("DID_COLOR", "1")]);
+    assert!(s5);
+    assert!(stdout5.contains("╭─ auth/jwt.md"));
+
+    let (s6, stdout6, _) = did_cmd_env(root, &["show", "auth/jwt.md"], &[("DID_BOX", "1"), ("DID_COLOR", "1"), ("DID_NO_COLOR", "1")]);
+    assert!(s6);
+    assert!(!stdout6.contains("\x1b[36m")); // Color opted out
+
+    // 7. DID_BOX & 8. DID_NO_BOX
+    let (s7, stdout7, _) = did_cmd_env(root, &["show", "auth/jwt.md"], &[("DID_BOX", "1"), ("NO_COLOR", "1")]);
+    println!("stdout7:\n{:?}", stdout7);
+    assert!(s7);
+    assert!(stdout7.contains("╭─ auth/jwt.md")); // Uncolored box
+    assert!(!stdout7.contains("\x1b[36m")); // No ANSI color
+
+    let (s8, stdout8, _) = did_cmd_env(root, &["show", "auth/jwt.md"], &[("DID_BOX", "1"), ("DID_NO_BOX", "1")]);
+    assert!(s8);
+    assert!(!stdout8.contains("╭─")); // Box disabled
+
+    // 9. DID_THEME & DID_SYNTAX_THEME
+    for theme in &["light", "github", "solarized", "dark"] {
+        let (st, stdout_t, _) = did_cmd_env(root, &["show", "auth/jwt.md"], &[("FORCE_COLOR", "1"), ("DID_THEME", theme)]);
+        assert!(st);
+        assert!(!stdout_t.is_empty());
+    }
+
+    // 10. DID_RELATED_LIMIT
+    let (s10, stdout10, _) = did_cmd_env(root, &["show", "auth/jwt.md"], &[("FORCE_COLOR", "1"), ("DID_RELATED_LIMIT", "1")]);
+    assert!(s10);
+    assert!(stdout10.contains("Related Items"));
+    assert!(stdout10.contains("auth/session.md"));
+
+    // 11. Hook Env Vars
+    let hook = root.join(".did/.hooks/show");
+    fs::create_dir_all(hook.parent().unwrap()).unwrap();
+    fs::write(
+        &hook,
+        "#!/bin/sh\necho EVENT=$DID_EVENT\necho TARGET=$DID_TARGET\necho REPO=$DID_REPO_ROOT\necho STATE=$DID_STATE_DIR\n",
+    )
+    .unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(&hook).unwrap().permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&hook, perms).unwrap();
+
+        let (shook, stdouthook, _) = did_cmd(root, &["show", "auth/jwt.md"]);
+        assert!(shook);
+        assert!(stdouthook.contains("EVENT=show"));
+        assert!(stdouthook.contains("TARGET=auth/jwt.md"));
+        assert!(stdouthook.contains("REPO="));
+        assert!(stdouthook.contains("STATE="));
+    }
 }

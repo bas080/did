@@ -14,7 +14,7 @@ pub enum BoxStyle {
     AdditionalInfo, // Yellow border
 }
 
-/// Determines whether colored markdown rendering should be enabled.
+/// Determines whether colored output should be enabled.
 pub fn should_color() -> bool {
     if let Ok(val) = env::var("NO_COLOR") {
         if !val.is_empty() {
@@ -44,6 +44,45 @@ pub fn should_color() -> bool {
             return true;
         }
     }
+    if let Ok(val) = env::var("DID_COLOR") {
+        if val == "1" || val.eq_ignore_ascii_case("true") {
+            return true;
+        }
+    }
+    if let Ok(val) = env::var("FORCE_COLOR") {
+        if val == "1" || val.eq_ignore_ascii_case("true") {
+            return true;
+        }
+    }
+    if let Ok(val) = env::var("FORCE_COLOR") {
+        if val == "1" || val.eq_ignore_ascii_case("true") {
+            return true;
+        }
+    }
+
+    std::io::stdout().is_terminal()
+}
+
+/// Determines whether box containers should be drawn around output sections.
+pub fn should_box() -> bool {
+    if let Ok(val) = env::var("DID_NO_BOX") {
+        if !val.is_empty() {
+            return false;
+        }
+    }
+    if let Ok(val) = env::var("NO_BOX") {
+        if !val.is_empty() {
+            return false;
+        }
+    }
+    if let Ok(val) = env::var("DID_BOX") {
+        if val == "0" || val.eq_ignore_ascii_case("false") {
+            return false;
+        }
+        if val == "1" || val.eq_ignore_ascii_case("true") {
+            return true;
+        }
+    }
 
     std::io::stdout().is_terminal()
 }
@@ -52,10 +91,28 @@ pub fn should_color() -> bool {
 pub fn highlight_and_box_codeblocks(md: &str, max_width: usize) -> String {
     let ps = SyntaxSet::load_defaults_newlines();
     let ts = ThemeSet::load_defaults();
-    let theme = ts.themes.get("base16-ocean.dark").or_else(|| ts.themes.values().next());
 
-    let border_color = "\x1b[38;5;244m"; // Dark Gray border for codeblocks
-    let reset = "\x1b[0m";
+    let theme_name = match env::var("DID_SYNTAX_THEME")
+        .or_else(|_| env::var("DID_THEME"))
+        .unwrap_or_default()
+        .to_lowercase()
+        .as_str()
+    {
+        "light" | "github" => "InspiredGitHub",
+        "solarized" => "Solarized (dark)",
+        "mocha" => "base16-mocha.dark",
+        _ => "base16-ocean.dark",
+    };
+
+    let theme = ts
+        .themes
+        .get(theme_name)
+        .or_else(|| ts.themes.get("base16-ocean.dark"))
+        .or_else(|| ts.themes.values().next());
+
+    let use_color = should_color();
+    let border_color = if use_color { "\x1b[38;5;244m" } else { "" };
+    let reset = if use_color { "\x1b[0m" } else { "" };
 
     let mut result = String::new();
     let lines: Vec<&str> = md.lines().collect();
@@ -72,7 +129,7 @@ pub fn highlight_and_box_codeblocks(md: &str, max_width: usize) -> String {
                 i += 1;
             }
             if i < lines.len() {
-                i += 1; // skip closing ```
+                i += 1;
             }
 
             let syntax = if !lang_token.is_empty() {
@@ -83,12 +140,15 @@ pub fn highlight_and_box_codeblocks(md: &str, max_width: usize) -> String {
                 ps.find_syntax_plain_text()
             };
 
-            let mut h = theme.map(|t| HighlightLines::new(syntax, t));
+            let mut h = if use_color {
+                theme.map(|t| HighlightLines::new(syntax, t))
+            } else {
+                None
+            };
 
             let box_width = max_width.saturating_sub(2).max(20);
             let inner_width = box_width.saturating_sub(4);
 
-            // Top border of codeblock
             let mut top = String::new();
             top.push_str("╭─ ");
             let lang_label = if lang_token.is_empty() { "code" } else { lang_token };
@@ -105,7 +165,9 @@ pub fn highlight_and_box_codeblocks(md: &str, max_width: usize) -> String {
             for code_line in code_lines {
                 let formatted_line = if let Some(ref mut highlighter) = h {
                     let line_with_nl = format!("{}\n", code_line);
-                    let ranges = highlighter.highlight_line(&line_with_nl, &ps).unwrap_or_default();
+                    let ranges = highlighter
+                        .highlight_line(&line_with_nl, &ps)
+                        .unwrap_or_default();
                     let escaped = as_24_bit_terminal_escaped(&ranges[..], false);
                     escaped.trim_end_matches('\n').to_string()
                 } else {
@@ -117,12 +179,7 @@ pub fn highlight_and_box_codeblocks(md: &str, max_width: usize) -> String {
 
                 result.push_str(&format!(
                     "{}│{} {} {}{}│{}\n",
-                    border_color,
-                    reset,
-                    formatted_line,
-                    " ".repeat(padding),
-                    border_color,
-                    reset
+                    border_color, reset, formatted_line, " ".repeat(padding), border_color, reset
                 ));
             }
 
@@ -153,30 +210,50 @@ pub fn render_markdown(md: &str) {
     }
 }
 
-/// Renders a titled content block inside a colored border container.
+/// Prints a section separator (`---`).
+pub fn render_section_break() {
+    if should_color() {
+        render_markdown("\n---\n");
+    } else {
+        println!("\n---");
+    }
+}
+
+/// Renders a titled content block inside a border container.
 ///
-/// - `Hook`: Red border
-/// - `TaskContent`: Cyan border
-/// - `AdditionalInfo`: Yellow border
+/// If `should_box()` is false, section content is printed with a `---` separator instead.
 pub fn draw_box(title: &str, content_md: &str, style: BoxStyle) {
-    if !should_color() {
-        if !title.is_empty() {
-            println!("{}", title);
-        }
-        if content_md.ends_with('\n') {
-            print!("{}", content_md);
+    if !should_box() {
+        if should_color() {
+            render_section_break();
+            if !title.is_empty() {
+                println!("## {}", title);
+            }
+            render_markdown(content_md);
         } else {
-            println!("{}", content_md);
+            if !title.is_empty() {
+                println!("{}", title);
+            }
+            if content_md.ends_with('\n') {
+                print!("{}", content_md);
+            } else {
+                println!("{}", content_md);
+            }
         }
         return;
     }
 
-    let color_code = match style {
-        BoxStyle::Hook => "\x1b[31m",
-        BoxStyle::TaskContent => "\x1b[36m",
-        BoxStyle::AdditionalInfo => "\x1b[33m",
+    let use_color = should_color();
+    let (color_code, reset) = if use_color {
+        let code = match style {
+            BoxStyle::Hook => "\x1b[31m",
+            BoxStyle::TaskContent => "\x1b[36m",
+            BoxStyle::AdditionalInfo => "\x1b[33m",
+        };
+        (code, "\x1b[0m")
+    } else {
+        ("", "")
     };
-    let reset = "\x1b[0m";
 
     let term_width = (terminal_size().0 as usize).clamp(40, 100);
     let inner_width = term_width.saturating_sub(4);
@@ -184,7 +261,11 @@ pub fn draw_box(title: &str, content_md: &str, style: BoxStyle) {
     let processed_md = highlight_and_box_codeblocks(content_md, inner_width);
 
     let skin = make_skin();
-    let rendered_text = format!("{}", skin.text(&processed_md, Some(inner_width)));
+    let rendered_text = if use_color {
+        format!("{}", skin.text(&processed_md, Some(inner_width)))
+    } else {
+        processed_md
+    };
 
     let lines: Vec<&str> = rendered_text.lines().collect();
 
@@ -210,12 +291,7 @@ pub fn draw_box(title: &str, content_md: &str, style: BoxStyle) {
         let padding = inner_width.saturating_sub(line_vis_width);
         println!(
             "{}│{} {} {}{}│{}",
-            color_code,
-            reset,
-            line,
-            " ".repeat(padding),
-            color_code,
-            reset
+            color_code, reset, line, " ".repeat(padding), color_code, reset
         );
     }
 
@@ -242,9 +318,17 @@ fn visible_width(s: &str) -> usize {
     width
 }
 
-/// Constructs a customized `MadSkin` with distinct, vibrant terminal colors.
+/// Constructs a customized `MadSkin` based on the configured theme.
 fn make_skin() -> MadSkin {
-    let mut skin = MadSkin::default_dark();
+    let theme_var = env::var("DID_THEME").unwrap_or_default().to_lowercase();
+    let is_light = theme_var == "light" || theme_var == "github";
+
+    let mut skin = if is_light {
+        MadSkin::default_light()
+    } else {
+        MadSkin::default_dark()
+    };
+
     skin.set_headers_fg(Color::Yellow);
     skin.bold.set_fg(Color::Cyan);
     skin.italic.set_fg(Color::Magenta);
