@@ -1,5 +1,6 @@
 mod cli;
 mod commands;
+mod renderer;
 mod repo;
 
 use clap::Parser;
