@@ -10,12 +10,9 @@ Replaces simple substring matching in `did query` with fuzzy search and relevanc
 4. **`tantivy`**: Full-text search engine library (Lucene alternative in Rust) for indexed queries.
 
 ## Decision
-Integrate `fuzzy-matcher` for `did query` to provide typo-tolerant, relevance-ranked search while maintaining a lean binary.
+Integrate `fuzzy-matcher` as a core component of `did query` to provide typo-tolerant, relevance-ranked search by default. No toggle or optional flag will be provided for this behavior.
 
 ## Recommended Approach
 Integrate `fuzzy-matcher` for `did query`:
 - Ranks search results by relevance score (path matches + header matches + content matches).
 - Allows typo-tolerant matching (e.g. `did query authjwt` matches `backend/auth/jwt.md`).
-
-## Open Questions for Refinement (@bas080)
-1. @bas080 Should fuzzy-matcher be integrated as an optional dependency or enabled by default for all `did query` invocations?

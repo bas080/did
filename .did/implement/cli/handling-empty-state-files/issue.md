@@ -10,5 +10,5 @@ Enhance `did add <PATH>` handling when no `-m` message or stdin content is provi
    - Example: `did add features/auth-fix.md` $\rightarrow$ creates file with content `# auth-fix`.
 2. This ensures that every task in the system has at least a basic title, maintaining consistency and visibility in `did status` and `did show`.
 
-## Open Questions for Refinement (@bas080)
-1. @bas080 Should 'did add' abort completely if the editor is closed without content, or fallback to generating a default header title?
+## Decision
+`did add` will fallback to generating a default header title based on the filename stem if the editor is closed without content. This ensures every task has a basic title for consistency and visibility.

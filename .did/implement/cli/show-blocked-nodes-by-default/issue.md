@@ -4,15 +4,15 @@
 Currently, running `did show <PATH>` on a task file that has open/unresolved sub-items in child directories fails with an error unless the `-a` (`--all`) flag is supplied (`did show -a <PATH>`).
 
 ## Proposed Change
-Since inspecting task content is non-destructive, `did show <PATH>` should display the task body by default even when blocked, followed by a brief list of blocking unresolved sub-items at the bottom:
-```
+Since inspecting task content is non-destructive, `did show <PATH>` should display the task body by default even when blocked. Any warnings regarding unresolved sub-items should be printed to `stderr` to keep the task content on `stdout` clean for piping or redirection:
+
+```bash
+# stdout
 <Task Content>
 
+# stderr
 [Blocked by unresolved sub-items:]
   - child/subtask.md
 ```
 
 This eliminates the need to re-run the command with `-a` when inspecting blocked parent tasks.
-
-## Open Questions for Refinement (@bas080)
-1. @bas080 Should 'did show' display blocked warnings on stderr or append them directly to the task body on stdout?

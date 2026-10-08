@@ -9,7 +9,4 @@ did done -r <DIRECTORY>
 ## Requirements
 1. Running `did done -r <DIRECTORY>` recursively finds all open task files inside `<DIRECTORY>` and marks them resolved (dot-prefixes file names and updates referencing symlinks).
 2. Executes ancestor `done` hooks for each completed task.
-3. Fails if any task in the directory is blocked by unresolved external prerequisites outside `<DIRECTORY>`.
-
-## Open Questions for Refinement (@bas080)
-1. @bas080 Should 'did done -r' stop on the first error if a sub-task is blocked, or process all unblocked tasks and report skipped blocked tasks?
+3. Fails immediately (stops execution) if any task in the directory is blocked by unresolved external prerequisites outside `<DIRECTORY>`.

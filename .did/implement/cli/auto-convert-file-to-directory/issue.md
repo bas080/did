@@ -6,9 +6,6 @@ Currently, if a task file exists at `parent.md` or `parent`, running `did add pa
 ## Proposed Feature
 When `did add parent/child.md` is executed and `parent` is an existing file (not a directory):
 1. Automatically convert `parent` file into a directory named `parent/`.
-2. Move the original content of `parent` into `parent/index.md` (or `parent/index`).
-3. Update any relative symlinks across `.did/` that previously pointed to `parent` to point to `parent/index.md`.
+2. Move the original content of `parent` into `parent/index.<ext>` (where `<ext>` is the original file's extension, e.g., `.md` or `.txt`).
+3. Update any relative symlinks across `.did/` that previously pointed to `parent` to point to the new index file (`parent/index.<ext>`).
 4. Create the new child task `parent/child.md`.
-
-## Open Questions for Refinement (@bas080)
-1. @bas080 Should auto-converting a file to a directory name the index file 'index.md' or keep the stem of the original file?

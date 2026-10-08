@@ -12,10 +12,7 @@ Add safe CLI operations that abstract direct file/folder operations:
 - `did clean`: Remove dangling or orphaned symlinks automatically.
 
 ### 2. Shell Integration & Aliases
-Instead of a dedicated TUI/REPL binary, `did` will provide a mechanism for users to integrate subcommands directly into their environment via shell aliases.
-- Provide a command (e.g., `did shell-init`) that outputs the necessary alias definitions for the user's current shell (Bash/Zsh).
-- This allows users to source the aliases into their `.bashrc` or `.zshrc`, enabling them to run `status`, `show`, `done`, etc., as first-class citizens in their native terminal.
+Instead of a dedicated TUI/REPL binary, `did` will provide a mechanism for users to integrate subcommands directly into their environment via shell aliases:
+- Provide a command `did aliases <shell>` (e.g., `did aliases bash`, `did aliases zsh`, `did aliases fish`) that outputs the necessary alias definitions for the specified shell.
+- This allows users to source the output into their shell configuration files, enabling them to run `status`, `show`, `done`, etc., as first-class citizens in their native terminal.
 - This approach maintains the "coding agent first" philosophy by avoiding binary bloat and staying compatible with existing shell workflows.
-
-## Open Questions for Refinement (@bas080)
-1. @bas080 Should shell integration be implemented via 'did shell-init' or auto-generated shell completions?

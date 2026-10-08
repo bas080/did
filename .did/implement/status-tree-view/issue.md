@@ -11,11 +11,8 @@ Currently, `did status` lists actionable items. As the project grows, a flat lis
   - **With `-a` / `--all`**: Shows the full hierarchy, including completed and blocked tasks.
   - **With blocked flags**: Includes blocked nodes in the tree.
 - **Status Indicators**:
-  - `[x]` for completed tasks
-  - `[ ]` for open/actionable tasks
-  - `[!]` for blocked tasks
+  - `- [x]` for completed tasks
+  - `- [ ]` for open/actionable tasks
+  - `- [!]` for blocked tasks
 
 This ensures the tree remains focused by default while allowing for full state inspection when requested.
-
-## Open Questions for Refinement (@bas080)
-1. @bas080 Should status tree view use ASCII characters (|- `--`) or Unicode box drawing characters (├── └──) by default?
