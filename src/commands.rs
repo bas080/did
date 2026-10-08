@@ -65,19 +65,19 @@ pub fn run(repo_opt: Option<Repo>, command: Commands, global_all: bool) -> ExitC
             };
             cmd_rm(&repo, &path, recursive)
         }
-        Commands::Status { path } => {
+        Commands::Status { path, tree } => {
             let repo = match require_repo(repo_opt) {
                 Ok(r) => r,
                 Err(code) => return code,
             };
-            cmd_status(&repo, path.as_deref(), global_all)
+            cmd_status(&repo, path.as_deref(), tree, global_all)
         }
-        Commands::Query { query, path } => {
+        Commands::Query { query, path, line_number } => {
             let repo = match require_repo(repo_opt) {
                 Ok(r) => r,
                 Err(code) => return code,
             };
-            cmd_search(&repo, &query, path.as_deref(), global_all)
+            cmd_search(&repo, &query, path.as_deref(), line_number, global_all)
         }
         Commands::Show { path } => {
             let repo = match require_repo(repo_opt) {
@@ -501,7 +501,7 @@ fn should_visit_entry(entry: &walkdir::DirEntry) -> bool {
     true
 }
 
-fn cmd_status(repo: &Repo, raw_path: Option<&Path>, all: bool) -> ExitCode {
+fn cmd_status(repo: &Repo, raw_path: Option<&Path>, tree: bool, all: bool) -> ExitCode {
     let root_path = match raw_path {
         Some(p) => repo.resolve_path(p),
         None => {
@@ -542,7 +542,7 @@ fn cmd_status(repo: &Repo, raw_path: Option<&Path>, all: bool) -> ExitCode {
         return ExitCode::FAILURE;
     }
 
-    let mut results = Vec::new();
+    let mut items = Vec::new();
     let mut blocked_count = 0;
     let mut closed_count = 0;
 
@@ -562,34 +562,55 @@ fn cmd_status(repo: &Repo, raw_path: Option<&Path>, all: bool) -> ExitCode {
         if is_file || is_symlink {
             let file_name = path.file_name().unwrap_or_default().to_string_lossy();
             let is_hidden = file_name.starts_with('.');
+            let is_blocked = !is_hidden && has_unresolved_subitems(repo, path);
 
             if is_hidden {
                 closed_count += 1;
-                if all {
-                    results.push(repo.relative_display_path(path));
-                }
-            } else if has_unresolved_subitems(repo, path) {
+            } else if is_blocked {
                 blocked_count += 1;
-                if all {
-                    results.push(repo.relative_display_path(path));
-                }
+            }
+
+            let include_in_output = if all {
+                true
             } else {
-                results.push(repo.relative_display_path(path));
+                !is_hidden && !is_blocked
+            };
+
+            if include_in_output {
+                let status_indicator = if is_hidden {
+                    "- [x]"
+                } else if is_blocked {
+                    "- [!]"
+                } else {
+                    "- [ ]"
+                };
+                items.push((repo.relative_display_path(path), status_indicator));
             }
         }
     }
 
-    results.sort();
-    results.dedup();
+    items.sort_by(|a, b| a.0.cmp(&b.0));
+    items.dedup_by(|a, b| a.0 == b.0);
 
-    print_results_with_limit(results, "No actionable tasks found.");
+    if tree {
+        if items.is_empty() {
+            eprintln!("No actionable tasks found.");
+        } else {
+            for (rel_path, indicator) in items {
+                println!("{} {}", indicator, rel_path);
+            }
+        }
+    } else {
+        let results: Vec<String> = items.into_iter().map(|(p, _)| p).collect();
+        print_results_with_limit(results, "No actionable tasks found.");
+    }
 
     eprintln!("[{} blocked, {} closed]", blocked_count, closed_count);
 
     ExitCode::SUCCESS
 }
 
-fn cmd_search(repo: &Repo, query: &str, raw_path: Option<&Path>, all: bool) -> ExitCode {
+fn cmd_search(repo: &Repo, query: &str, raw_path: Option<&Path>, show_line_num: bool, all: bool) -> ExitCode {
     let root_path = match raw_path {
         Some(p) => repo.resolve_path(p),
         None => repo.did_dir.clone(),
@@ -649,16 +670,36 @@ fn cmd_search(repo: &Repo, query: &str, raw_path: Option<&Path>, all: bool) -> E
             if should_include {
                 let rel_display = repo.relative_display_path(path);
                 let matches_path = rel_display.to_lowercase().contains(&query_lower);
-                let matches_content = if is_file {
-                    fs::read_to_string(path)
-                        .ok()
-                        .map(|c| c.to_lowercase().contains(&query_lower))
-                        .unwrap_or(false)
+
+                let content_matches: Vec<(usize, String)> = if is_file {
+                    if let Ok(content) = fs::read_to_string(path) {
+                        content
+                            .lines()
+                            .enumerate()
+                            .filter_map(|(idx, line)| {
+                                if line.to_lowercase().contains(&query_lower) {
+                                    Some((idx + 1, line.to_string()))
+                                } else {
+                                    None
+                                }
+                            })
+                            .collect()
+                    } else {
+                        Vec::new()
+                    }
                 } else {
-                    false
+                    Vec::new()
                 };
 
-                if matches_path || matches_content {
+                if !content_matches.is_empty() {
+                    for (line_num, snippet) in content_matches {
+                        if show_line_num {
+                            results.push(format!("{}:{}: {}", rel_display, line_num, snippet));
+                        } else {
+                            results.push(format!("{}: {}", rel_display, snippet));
+                        }
+                    }
+                } else if matches_path {
                     results.push(rel_display);
                 }
             }
