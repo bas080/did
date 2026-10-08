@@ -1,5 +1,9 @@
 use std::env;
 use std::io::IsTerminal;
+use syntect::easy::HighlightLines;
+use syntect::highlighting::ThemeSet;
+use syntect::parsing::SyntaxSet;
+use syntect::util::as_24_bit_terminal_escaped;
 use termimad::crossterm::style::Color;
 use termimad::{terminal_size, MadSkin};
 
@@ -44,12 +48,104 @@ pub fn should_color() -> bool {
     std::io::stdout().is_terminal()
 }
 
-/// Renders markdown text directly (without borders) if colored rendering is enabled,
+/// Highlights syntax in codeblocks and wraps them in a styled border box.
+pub fn highlight_and_box_codeblocks(md: &str, max_width: usize) -> String {
+    let ps = SyntaxSet::load_defaults_newlines();
+    let ts = ThemeSet::load_defaults();
+    let theme = ts.themes.get("base16-ocean.dark").or_else(|| ts.themes.values().next());
+
+    let border_color = "\x1b[38;5;244m"; // Dark Gray border for codeblocks
+    let reset = "\x1b[0m";
+
+    let mut result = String::new();
+    let lines: Vec<&str> = md.lines().collect();
+    let mut i = 0;
+
+    while i < lines.len() {
+        let line = lines[i];
+        if line.trim_start().starts_with("```") {
+            let lang_token = line.trim_start().trim_start_matches('`').trim();
+            let mut code_lines = Vec::new();
+            i += 1;
+            while i < lines.len() && !lines[i].trim_start().starts_with("```") {
+                code_lines.push(lines[i]);
+                i += 1;
+            }
+            if i < lines.len() {
+                i += 1; // skip closing ```
+            }
+
+            let syntax = if !lang_token.is_empty() {
+                ps.find_syntax_by_token(lang_token)
+                    .or_else(|| ps.find_syntax_by_extension(lang_token))
+                    .unwrap_or_else(|| ps.find_syntax_plain_text())
+            } else {
+                ps.find_syntax_plain_text()
+            };
+
+            let mut h = theme.map(|t| HighlightLines::new(syntax, t));
+
+            let box_width = max_width.saturating_sub(2).max(20);
+            let inner_width = box_width.saturating_sub(4);
+
+            // Top border of codeblock
+            let mut top = String::new();
+            top.push_str("╭─ ");
+            let lang_label = if lang_token.is_empty() { "code" } else { lang_token };
+            top.push_str(lang_label);
+            top.push(' ');
+            let top_vis = unicode_width::UnicodeWidthStr::width(top.as_str());
+            if top_vis < box_width.saturating_sub(1) {
+                top.push_str(&"─".repeat(box_width.saturating_sub(1).saturating_sub(top_vis)));
+            }
+            top.push('╮');
+
+            result.push_str(&format!("{}{}{}\n", border_color, top, reset));
+
+            for code_line in code_lines {
+                let formatted_line = if let Some(ref mut highlighter) = h {
+                    let line_with_nl = format!("{}\n", code_line);
+                    let ranges = highlighter.highlight_line(&line_with_nl, &ps).unwrap_or_default();
+                    let escaped = as_24_bit_terminal_escaped(&ranges[..], false);
+                    escaped.trim_end_matches('\n').to_string()
+                } else {
+                    code_line.to_string()
+                };
+
+                let vis_len = visible_width(&formatted_line);
+                let padding = inner_width.saturating_sub(vis_len);
+
+                result.push_str(&format!(
+                    "{}│{} {} {}{}│{}\n",
+                    border_color,
+                    reset,
+                    formatted_line,
+                    " ".repeat(padding),
+                    border_color,
+                    reset
+                ));
+            }
+
+            let bottom = format!("╰{}╯", "─".repeat(box_width.saturating_sub(2)));
+            result.push_str(&format!("{}{}{}\n", border_color, bottom, reset));
+        } else {
+            result.push_str(line);
+            result.push('\n');
+            i += 1;
+        }
+    }
+
+    result
+}
+
+/// Renders markdown text directly if colored rendering is enabled,
 /// or outputs standard plain text otherwise.
 pub fn render_markdown(md: &str) {
     if should_color() {
+        let term_width = (terminal_size().0 as usize).clamp(40, 100);
+        let processed = highlight_and_box_codeblocks(md, term_width);
         let skin = make_skin();
-        skin.print_text(md);
+        skin.print_text(&processed);
     } else if md.ends_with('\n') {
         print!("{}", md);
     } else {
@@ -85,8 +181,10 @@ pub fn draw_box(title: &str, content_md: &str, style: BoxStyle) {
     let term_width = (terminal_size().0 as usize).clamp(40, 100);
     let inner_width = term_width.saturating_sub(4);
 
+    let processed_md = highlight_and_box_codeblocks(content_md, inner_width);
+
     let skin = make_skin();
-    let rendered_text = format!("{}", skin.text(content_md, Some(inner_width)));
+    let rendered_text = format!("{}", skin.text(&processed_md, Some(inner_width)));
 
     let lines: Vec<&str> = rendered_text.lines().collect();
 
