@@ -18,4 +18,5 @@ To avoid cluttering the output and to reduce token consumption for AI agents, co
 
 This ensures the output remains lean by default while providing deep inspection capabilities when explicitly requested.
 
-@bas080
+## Open Questions for Refinement (@bas080)
+1. @bas080 Should line-number output (-n) implicitly enable content matching (-c), or require both flags to be passed?

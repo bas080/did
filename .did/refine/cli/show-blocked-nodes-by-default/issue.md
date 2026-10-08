@@ -14,4 +14,5 @@ Since inspecting task content is non-destructive, `did show <PATH>` should displ
 
 This eliminates the need to re-run the command with `-a` when inspecting blocked parent tasks.
 
-@bas080
+## Open Questions for Refinement (@bas080)
+1. @bas080 Should 'did show' display blocked warnings on stderr or append them directly to the task body on stdout?

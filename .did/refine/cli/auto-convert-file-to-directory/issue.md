@@ -10,4 +10,5 @@ When `did add parent/child.md` is executed and `parent` is an existing file (not
 3. Update any relative symlinks across `.did/` that previously pointed to `parent` to point to `parent/index.md`.
 4. Create the new child task `parent/child.md`.
 
-@bas080
+## Open Questions for Refinement (@bas080)
+1. @bas080 Should auto-converting a file to a directory name the index file 'index.md' or keep the stem of the original file?

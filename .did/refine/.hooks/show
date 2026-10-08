@@ -13,7 +13,7 @@ Every issue in `.did/refine/` must be systematically expanded until it satisfies
 - Why is this feature or bug fix needed?
 
 ### 2. User Feedback Tagging (`@bas080`)
-- **User Question Tagging**: Whenever user feedback or clarification is needed on an issue in `.did/refine/`, add `@bas080` to the issue document followed by the explicit question.
+- **User Question Tagging**: Whenever an issue in `.did/refine/` is marked or tagged with `@bas080`, the tag MUST be accompanied by an explicit question directed to `@bas080` outlining the required feedback or clarification.
 
 ### 3. Feature Conflicts & System Interaction
 - **Document Feature Conflicts**: Identify and document any conflicting interactions with existing features or CLI subcommands that require investigation.

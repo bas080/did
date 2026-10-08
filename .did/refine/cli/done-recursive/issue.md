@@ -11,4 +11,5 @@ did done -r <DIRECTORY>
 2. Executes ancestor `done` hooks for each completed task.
 3. Fails if any task in the directory is blocked by unresolved external prerequisites outside `<DIRECTORY>`.
 
-@bas080
+## Open Questions for Refinement (@bas080)
+1. @bas080 Should 'did done -r' stop on the first error if a sub-task is blocked, or process all unblocked tasks and report skipped blocked tasks?

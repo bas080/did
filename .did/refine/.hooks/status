@@ -1,4 +1,5 @@
 # Refinement Directory Guidelines (`.did/refine/.hooks/status`)
 
 - Tasks in `.did/refine/` require iterative specification and requirement clarification.
+- Whenever an issue in `.did/refine/` is tagged with `@bas080`, the tag MUST be accompanied by an explicit question directed to `@bas080`.
 - Move tasks to `.did/implement/` once requirements, edge cases, and test plans are 100% clear.
