@@ -86,12 +86,12 @@ pub fn run(repo_opt: Option<Repo>, command: Commands, global_all: bool) -> ExitC
             };
             cmd_show(&repo, &path, global_all)
         }
-        Commands::Done { path } => {
+        Commands::Done { path, recursive } => {
             let repo = match require_repo(repo_opt) {
                 Ok(r) => r,
                 Err(code) => return code,
             };
-            cmd_done(&repo, &path)
+            cmd_done(&repo, &path, recursive)
         }
         Commands::Undone { path } => {
             let repo = match require_repo(repo_opt) {
@@ -133,10 +133,62 @@ fn cmd_add(repo: &Repo, raw_path: &Path, message: Option<String>) -> ExitCode {
         return ExitCode::FAILURE;
     }
 
-    if let Some(parent) = target_path.parent() {
-        if let Err(e) = fs::create_dir_all(parent) {
-            eprintln!("error creating directories: {}", e);
-            return ExitCode::FAILURE;
+    if let Some(parent_dir) = target_path.parent() {
+        if !parent_dir.is_dir() {
+            // Check if parent_dir is a file or if a file exists with parent_dir's stem (e.g. parent.md)
+            let existing_file = if parent_dir.is_file() {
+                Some(parent_dir.to_path_buf())
+            } else if let Some(grandparent) = parent_dir.parent() {
+                let stem = parent_dir.file_name().unwrap_or_default().to_string_lossy();
+                let mut found = None;
+                if let Ok(entries) = fs::read_dir(grandparent) {
+                    for entry in entries.flatten() {
+                        let p = entry.path();
+                        if p.is_file() && !p.is_symlink() {
+                            if let Some(p_stem) = p.file_stem() {
+                                if p_stem.to_string_lossy() == stem {
+                                    found = Some(p);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+                found
+            } else {
+                None
+            };
+
+            if let Some(old_file) = existing_file {
+                let ext = old_file
+                    .extension()
+                    .map(|e| e.to_string_lossy().to_string())
+                    .unwrap_or_else(|| "md".to_string());
+                let temp_file = old_file.with_extension(format!("{}.tmp_did_convert", ext));
+
+                if let Err(e) = fs::rename(&old_file, &temp_file) {
+                    eprintln!("error renaming parent file for conversion: {}", e);
+                    return ExitCode::FAILURE;
+                }
+
+                if let Err(e) = fs::create_dir_all(parent_dir) {
+                    eprintln!("error creating parent directory: {}", e);
+                    let _ = fs::rename(&temp_file, &old_file);
+                    return ExitCode::FAILURE;
+                }
+
+                let index_file = parent_dir.join(format!("index.{}", ext));
+                if let Err(e) = fs::rename(&temp_file, &index_file) {
+                    eprintln!("error moving parent content to index file: {}", e);
+                    return ExitCode::FAILURE;
+                }
+
+                // Update relative symlinks pointing to old parent file across .did
+                update_symlinks(repo, &old_file, &index_file);
+            } else if let Err(e) = fs::create_dir_all(parent_dir) {
+                eprintln!("error creating directories: {}", e);
+                return ExitCode::FAILURE;
+            }
         }
     }
 
@@ -157,8 +209,18 @@ fn cmd_add(repo: &Repo, raw_path: &Path, message: Option<String>) -> ExitCode {
         return ExitCode::FAILURE;
     }
 
+    let default_header = || {
+        let stem = target_path
+            .file_stem()
+            .unwrap_or_default()
+            .to_string_lossy();
+        format!("# {}\n", stem)
+    };
+
     if let Some(msg) = message {
-        let content = if msg.ends_with('\n') {
+        let content = if msg.trim().is_empty() {
+            default_header()
+        } else if msg.ends_with('\n') {
             msg
         } else {
             format!("{}\n", msg)
@@ -179,7 +241,17 @@ fn cmd_add(repo: &Repo, raw_path: &Path, message: Option<String>) -> ExitCode {
         let status = Command::new(&editor).arg(&target_path).status();
 
         match status {
-            Ok(s) if s.success() => {}
+            Ok(s) if s.success() => {
+                if let Ok(content) = fs::read_to_string(&target_path) {
+                    if content.trim().is_empty() {
+                        let header = default_header();
+                        if let Err(e) = fs::write(&target_path, header) {
+                            eprintln!("error writing file: {}", e);
+                            return ExitCode::FAILURE;
+                        }
+                    }
+                }
+            }
             _ => {
                 eprintln!("error: editor '{}' failed or exited with error", editor);
                 return ExitCode::FAILURE;
@@ -891,7 +963,7 @@ fn cmd_show(repo: &Repo, raw_path: &Path, _all: bool) -> ExitCode {
     ExitCode::SUCCESS
 }
 
-fn cmd_done(repo: &Repo, raw_path: &Path) -> ExitCode {
+fn cmd_done(repo: &Repo, raw_path: &Path, recursive: bool) -> ExitCode {
     let target_path = repo.resolve_path(raw_path);
 
     let meta = match fs::symlink_metadata(&target_path) {
@@ -905,14 +977,78 @@ fn cmd_done(repo: &Repo, raw_path: &Path) -> ExitCode {
         }
     };
 
-    if meta.is_dir() {
-        eprintln!(
-            "error: cannot complete a directory: {}",
-            repo.relative_display_path(&target_path)
-        );
-        return ExitCode::FAILURE;
-    }
+    let is_dir = meta.is_dir() && !target_path.is_symlink();
 
+    if is_dir {
+        if !recursive {
+            eprintln!(
+                "error: cannot complete a directory: {}",
+                repo.relative_display_path(&target_path)
+            );
+            return ExitCode::FAILURE;
+        }
+
+        // Collect all open task files in directory
+        let mut tasks = Vec::new();
+        for entry in WalkDir::new(&target_path)
+            .into_iter()
+            .filter_entry(should_visit_entry)
+            .filter_map(|e| e.ok())
+        {
+            let p = entry.path();
+            if is_reserved_hook_file(p) || p.is_dir() {
+                continue;
+            }
+            let name = p.file_name().unwrap_or_default().to_string_lossy();
+            if !name.starts_with('.') {
+                tasks.push(p.to_path_buf());
+            }
+        }
+
+        // Sort by path component depth descending, then alphabetically, so deeper sub-items are resolved before parent tasks
+        tasks.sort_by(|a, b| {
+            let depth_a = a.components().count();
+            let depth_b = b.components().count();
+            depth_b.cmp(&depth_a).then_with(|| a.cmp(b))
+        });
+
+        // Validate that no task has blocking items OUTSIDE target_path
+        for task in &tasks {
+            let blocking = get_unresolved_blocking_items(repo, task);
+            let external_blocking: Vec<_> = blocking
+                .into_iter()
+                .filter(|item| {
+                    let item_path = repo.did_dir.join(item.split(" -> ").next().unwrap_or(item));
+                    !item_path.starts_with(&target_path)
+                })
+                .collect();
+
+            if !external_blocking.is_empty() {
+                eprintln!(
+                    "error: cannot mark task '{}' done: unresolved external prerequisites remain:",
+                    repo.relative_display_path(task)
+                );
+                for item in external_blocking {
+                    eprintln!("  - {}", item);
+                }
+                return ExitCode::FAILURE;
+            }
+        }
+
+        // Complete each task
+        for task in tasks {
+            if cmd_done_single(repo, &task) != ExitCode::SUCCESS {
+                return ExitCode::FAILURE;
+            }
+        }
+
+        ExitCode::SUCCESS
+    } else {
+        cmd_done_single(repo, &target_path)
+    }
+}
+
+fn cmd_done_single(repo: &Repo, target_path: &Path) -> ExitCode {
     let file_name = match target_path.file_name() {
         Some(name) => name.to_string_lossy(),
         None => {
@@ -926,11 +1062,11 @@ fn cmd_done(repo: &Repo, raw_path: &Path) -> ExitCode {
         return ExitCode::SUCCESS;
     }
 
-    let blocking = get_unresolved_blocking_items(repo, &target_path);
+    let blocking = get_unresolved_blocking_items(repo, target_path);
     if !blocking.is_empty() {
         eprintln!(
             "error: cannot mark task '{}' done: unresolved sub-items remain:",
-            repo.relative_display_path(&target_path)
+            repo.relative_display_path(target_path)
         );
         for item in blocking {
             eprintln!("  - {}", item);
@@ -938,10 +1074,10 @@ fn cmd_done(repo: &Repo, raw_path: &Path) -> ExitCode {
         return ExitCode::FAILURE;
     }
 
-    let target_rel = repo.relative_display_path(&target_path);
+    let target_rel = repo.relative_display_path(target_path);
     if run_ancestor_hooks(
         repo,
-        &target_path,
+        target_path,
         HookEnv {
             event: "done",
             target: Some(&target_rel),
@@ -959,13 +1095,13 @@ fn cmd_done(repo: &Repo, raw_path: &Path) -> ExitCode {
     let parent = target_path.parent().unwrap();
     let new_target_path = parent.join(&new_filename);
 
-    if let Err(e) = fs::rename(&target_path, &new_target_path) {
+    if let Err(e) = fs::rename(target_path, &new_target_path) {
         eprintln!("error marking task done: {}", e);
         return ExitCode::FAILURE;
     }
 
     // Update symlinks pointing to target_path across .did
-    update_symlinks(repo, &target_path, &new_target_path);
+    update_symlinks(repo, target_path, &new_target_path);
 
     ExitCode::SUCCESS
 }
@@ -1295,24 +1431,30 @@ fn get_unresolved_blocking_items(repo: &Repo, task_file: &Path) -> Vec<String> {
     let task_stem = task_file.file_stem().unwrap_or_default().to_string_lossy();
     let mut items = Vec::new();
 
-    if let Ok(entries) = fs::read_dir(parent_dir) {
-        for entry in entries.flatten() {
-            let p = entry.path();
-            if p == task_file {
-                continue;
-            }
-            let is_symlink = p.is_symlink();
-            if p.is_dir() && !is_symlink {
-                let dir_name = p.file_name().unwrap_or_default().to_string_lossy();
-                if dir_name.starts_with('.') {
+    if task_stem == "index" {
+        collect_unresolved_in_dir(repo, parent_dir, &mut items);
+        let self_rel = repo.relative_display_path(task_file);
+        items.retain(|item| item != &self_rel);
+    } else {
+        if let Ok(entries) = fs::read_dir(parent_dir) {
+            for entry in entries.flatten() {
+                let p = entry.path();
+                if p == task_file {
                     continue;
                 }
-                if is_root_dir {
-                    if dir_name == task_stem {
+                let is_symlink = p.is_symlink();
+                if p.is_dir() && !is_symlink {
+                    let dir_name = p.file_name().unwrap_or_default().to_string_lossy();
+                    if dir_name.starts_with('.') {
+                        continue;
+                    }
+                    if is_root_dir {
+                        if dir_name == task_stem {
+                            collect_unresolved_in_dir(repo, &p, &mut items);
+                        }
+                    } else {
                         collect_unresolved_in_dir(repo, &p, &mut items);
                     }
-                } else {
-                    collect_unresolved_in_dir(repo, &p, &mut items);
                 }
             }
         }
@@ -1383,6 +1525,13 @@ fn update_symlinks(repo: &Repo, old_target: &Path, new_target: &Path) {
         .map(|n| n.to_string_lossy().starts_with('.'))
         .unwrap_or(false);
 
+    let is_new_dot = new_target
+        .file_name()
+        .map(|n| n.to_string_lossy().starts_with('.'))
+        .unwrap_or(false);
+
+    let same_status = is_old_dot == is_new_dot;
+
     for entry in WalkDir::new(&repo.did_dir).into_iter().filter_map(|e| e.ok()) {
         let path = entry.path();
         if path.is_symlink() {
@@ -1398,7 +1547,9 @@ fn update_symlinks(repo: &Repo, old_target: &Path, new_target: &Path) {
                 if norm_target == old_norm {
                     let parent = path.parent().unwrap();
                     let old_sym_name = path.file_name().unwrap().to_string_lossy();
-                    let new_sym_name = if is_old_dot {
+                    let new_sym_name = if same_status {
+                        old_sym_name.to_string()
+                    } else if is_old_dot {
                         old_sym_name.strip_prefix('.').unwrap_or(&old_sym_name).to_string()
                     } else {
                         if old_sym_name.starts_with('.') {

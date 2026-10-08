@@ -53,8 +53,12 @@ pub enum Commands {
 
     /// Mark PATH as resolved (hides it; fails if sub-items remain open)
     Done {
-        /// Task file path
+        /// Task file path or directory
         path: PathBuf,
+
+        /// Mark all open tasks inside directory resolved recursively
+        #[arg(short = 'r', long = "recursive")]
+        recursive: bool,
     },
 
     /// Mark a resolved PATH as open/undone (removes leading dot; updates symlinks)
