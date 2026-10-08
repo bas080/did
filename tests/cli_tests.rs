@@ -213,10 +213,11 @@ fn test_show_and_done_blocked_output() {
     did_cmd(root, &["add", "backend/auth.md", "-m", "Auth task"]);
     did_cmd(root, &["add", "backend/auth/sub/research.md", "-m", "Research"]);
 
-    // show backend/auth.md fails and lists blocking sub-items in stderr
-    let (success_show, _, stderr_show) = did_cmd(root, &["show", "backend/auth.md"]);
-    assert!(!success_show);
-    assert!(stderr_show.contains("error: task 'backend/auth.md' is blocked by unresolved sub-items:"));
+    // show backend/auth.md succeeds by default on blocked node, showing task content on stdout and warnings on stderr
+    let (success_show, stdout_show, stderr_show) = did_cmd(root, &["show", "backend/auth.md"]);
+    assert!(success_show);
+    assert!(stdout_show.contains("Auth task"));
+    assert!(stderr_show.contains("[Blocked by unresolved sub-items:]"));
     assert!(stderr_show.contains("- backend/auth/sub/research.md"));
 
     // done backend/auth.md fails and lists blocking sub-items in stderr

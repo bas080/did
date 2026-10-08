@@ -127,6 +127,7 @@ did undone implement/auth/jwt.md
 
 | Variable | Description |
 | :--- | :--- |
+| `DID_STATUS_PATH` | Specifies a default subtree path under `.did/` when running `did status` without an explicit path argument. |
 | `DID_STATUS_LIMIT` | Sets the maximum number of items returned by `did status` or `did query` before displaying a truncation notice on `stderr`. |
 | `DID_LOG_PATH` | Activates XML execution telemetry logging. Relative paths are resolved relative to the parent directory where `.did/` lives. |
 | `DID_DEBUG` | Enables verbose diagnostic logging on `stderr`. |
