@@ -1101,17 +1101,20 @@ fn cmd_test(repo: &Repo) -> ExitCode {
         }
 
         if path.is_file() {
-            if !is_executable(path) {
-                if let Ok(content) = fs::read_to_string(path) {
-                    if content.starts_with("#!") {
+            if let Ok(bytes) = fs::read(path) {
+                if bytes.iter().all(|b| b.is_ascii_whitespace()) {
+                    violations.push(format!(
+                        "Empty task file found: '{}'",
+                        rel_display
+                    ));
+                } else if !is_executable(path) {
+                    if bytes.starts_with(b"#!") {
                         violations.push(format!(
                             "File has shebang line but lacks execution permissions: '{}'",
                             rel_display
                         ));
                     }
-                }
-            } else if let Ok(bytes) = fs::read(path) {
-                if !has_shebang_or_binary_header(&bytes) {
+                } else if !has_shebang_or_binary_header(&bytes) {
                     violations.push(format!(
                         "Executable file lacks shebang line (#!) or binary header: '{}'",
                         rel_display
@@ -1175,9 +1178,16 @@ pub fn cmd_help(repo_opt: Option<&Repo>, topic: Option<&str>) -> ExitCode {
             print_hooks_topic_help();
         }
         Some(t) => {
+            let resolved_topic = match t {
+                "ln" => "link",
+                "search" => "query",
+                "move" => "mv",
+                "remove" => "rm",
+                other => other,
+            };
             use clap::CommandFactory;
             let mut cmd = crate::cli::Cli::command();
-            if let Some(sub) = cmd.find_subcommand_mut(t) {
+            if let Some(sub) = cmd.find_subcommand_mut(resolved_topic) {
                 let _ = sub.print_help();
                 println!();
             } else {

@@ -1076,6 +1076,19 @@ fn test_did_test_subcommand() {
 }
 
 #[test]
+fn test_did_test_empty_file_fails() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    fs::create_dir_all(root.join(".did/implement/empty")).unwrap();
+    fs::write(root.join(".did/implement/empty/empty_task.md"), "").unwrap();
+
+    let (success, _, stderr) = did_cmd(root, &["test"]);
+    assert!(!success);
+    assert!(stderr.contains("Empty task file found:"));
+}
+
+#[test]
 fn test_did_test_executable_without_shebang_fails() {
     let dir = tempdir().unwrap();
     let root = dir.path();
@@ -1200,6 +1213,22 @@ fn test_help_topic_subcommand() {
     let (success, stdout, _) = did_cmd(root, &["help", "status"]);
     assert!(success);
     assert!(stdout.contains("List actionables"));
+
+    for (alias, expected) in &[
+        ("ln", "link"),
+        ("search", "query"),
+        ("move", "mv"),
+        ("remove", "rm"),
+    ] {
+        let (success, stdout, _) = did_cmd(root, &["help", alias]);
+        assert!(success, "help {} failed", alias);
+        assert!(
+            stdout.contains(expected) || !stdout.is_empty(),
+            "help {} output mismatch: {}",
+            alias,
+            stdout
+        );
+    }
 }
 
 #[test]
