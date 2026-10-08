@@ -4,15 +4,14 @@
 Ensure that issues marked as resolved (hidden files starting with `.`) do not contain any unchecked checklist items (`- [ ]`). If a task is considered "done", all its acceptance criteria and sub-tasks must be explicitly checked off. Finding an unchecked item in a resolved file indicates a premature completion and should be flagged as a health violation.
 
 ## Proposed Implementation
-Enhance the `did test` command to validate the content of resolved issues:
+Implement this check directly within the `.did/.hooks/test` shell script. The logic should be added as an in-place script block rather than calling an external tool or separate script file, keeping the health check logic consolidated within the hook.
 
-1. **Resolved File Scanning**: During the walk of the `.did/` directory, identify files that are marked as done (filenames starting with `.`).
-2. **Pattern Matching**: Read the content of these resolved files and search for the markdown unchecked checkbox pattern: `- [ ]`.
+1. **Resolved File Scanning**: The hook script scans for files in the `.did/` directory that are marked as done (filenames starting with `.`).
+2. **Pattern Matching**: It reads the content of these resolved files and searches for the markdown unchecked checkbox pattern: `- [ ]`.
 3. **Violation Reporting**: If unchecked items are found in a resolved file:
-   - Report a health violation.
-   - The violation message should clearly state that the issue was marked done but still has open items: `Violation: Resolved issue '.path/to/issue.md' contains unchecked checklist items`.
-   - `did test` should exit with a non-zero code.
-4. **Success State**: Resolved files with only checked items (`- [x]`), no checkboxes, or active files (not starting with `.`) are ignored by this specific check.
+   - The hook prints a violation message to `stderr`.
+   - The hook exits with a non-zero code, causing `did test` to fail.
+4. **Success State**: Resolved files with only checked items (`- [x]`), no checkboxes, or active files (not starting with `.`) are ignored.
 
 ## Requirements
 - [ ] Implement a check for `- [ ]` patterns specifically for resolved (dot) files within `did test`.
