@@ -17,4 +17,5 @@ Currently, `did status` lists actionable items. As the project grows, a flat lis
 
 This ensures the tree remains focused by default while allowing for full state inspection when requested.
 
-@bas080
+## Open Questions for Refinement (@bas080)
+1. @bas080 Should status tree view use ASCII characters (|- `--`) or Unicode box drawing characters (├── └──) by default?

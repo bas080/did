@@ -17,4 +17,5 @@ Integrate `fuzzy-matcher` for `did query`:
 - Ranks search results by relevance score (path matches + header matches + content matches).
 - Allows typo-tolerant matching (e.g. `did query authjwt` matches `backend/auth/jwt.md`).
 
-@bas080
+## Open Questions for Refinement (@bas080)
+1. @bas080 Should fuzzy-matcher be integrated as an optional dependency or enabled by default for all `did query` invocations?

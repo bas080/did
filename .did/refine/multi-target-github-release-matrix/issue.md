@@ -4,4 +4,5 @@ Refine the GitHub Actions release workflow matrix to define specific runner OSes
 ## Decision
 Multi-target release builds will publish single binary artifacts whenever possible for the target system (e.g., standalone binaries for Linux, macOS, and Windows). For systems where standalone binaries are not the standard or are impractical, appropriate archives will be used.
 
-@bas080
+## Open Questions for Refinement (@bas080)
+1. @bas080 Which target OSes and architecture triples should be prioritized for the initial release matrix?
