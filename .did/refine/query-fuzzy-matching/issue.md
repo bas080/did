@@ -16,3 +16,5 @@ Integrate `fuzzy-matcher` for `did query` to provide typo-tolerant, relevance-ra
 Integrate `fuzzy-matcher` for `did query`:
 - Ranks search results by relevance score (path matches + header matches + content matches).
 - Allows typo-tolerant matching (e.g. `did query authjwt` matches `backend/auth/jwt.md`).
+
+@bas080
