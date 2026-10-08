@@ -838,7 +838,18 @@ fn run_ancestor_hooks(repo: &Repo, start_path: &Path, env_spec: HookEnv) -> Resu
                             if printed_any {
                                 println!();
                             }
-                            if stdout_str.ends_with('\n') {
+                            if crate::renderer::should_color() {
+                                let lines: Vec<String> = stdout_str
+                                    .lines()
+                                    .map(|line| format!("> {}", line))
+                                    .collect();
+                                let boxed = format!(
+                                    "> **Ancestor Hook Output (`{}`):**\n>\n{}\n",
+                                    env_spec.event,
+                                    lines.join("\n")
+                                );
+                                crate::renderer::render_markdown(&boxed);
+                            } else if stdout_str.ends_with('\n') {
                                 print!("{}", stdout_str);
                             } else {
                                 println!("{}", stdout_str);
@@ -1273,16 +1284,31 @@ fn cmd_test(repo: &Repo) -> ExitCode {
     }
 
     if !violations.is_empty() {
-        eprintln!(
-            "error: .did repository health check failed with {} violations:",
-            violations.len()
-        );
-        for v in violations {
-            eprintln!("  - {}", v);
+        if crate::renderer::should_color() {
+            let mut msg = format!(
+                "**error:** `.did` repository health check failed with **{}** violations:\n\n",
+                violations.len()
+            );
+            for v in &violations {
+                msg.push_str(&format!("* {}\n", v));
+            }
+            crate::renderer::render_markdown(&msg);
+        } else {
+            eprintln!(
+                "error: .did repository health check failed with {} violations:",
+                violations.len()
+            );
+            for v in violations {
+                eprintln!("  - {}", v);
+            }
         }
         ExitCode::FAILURE
     } else {
-        println!(".did state directory is clean.");
+        if crate::renderer::should_color() {
+            crate::renderer::render_markdown(".did state directory is **clean**.");
+        } else {
+            println!(".did state directory is clean.");
+        }
         ExitCode::SUCCESS
     }
 }
@@ -1349,8 +1375,7 @@ pub fn cmd_help(repo_opt: Option<&Repo>, topic: Option<&str>) -> ExitCode {
 }
 
 fn print_hooks_topic_help() {
-    println!(
-        "# Lifecycle Hooks Documentation (`did help hooks`)\n\n\
+    let doc = "# Lifecycle Hooks Documentation (`did help hooks`)\n\n\
         In `did`, any directory in `.did/` can contain a `.hooks/` directory with hook scripts\n\
         or static files named after lifecycle events.\n\n\
         ## Hook Discovery & Precedence\n\
@@ -1378,8 +1403,8 @@ fn print_hooks_topic_help() {
         - `rm`: Executed before removing in `did rm <PATH>`\n\
         - `query`: Executed during search in `did query <QUERY>`\n\
         - `test`: Executed during repository health check in `did test`\n\
-        - `help`: Executed during `did help [TOPIC]`"
-    );
+        - `help`: Executed during `did help [TOPIC]`\n";
+    crate::renderer::render_markdown(doc);
 }
 
 fn cmd_autocomplete(shell: &str) -> ExitCode {
@@ -1403,21 +1428,41 @@ fn cmd_autocomplete(shell: &str) -> ExitCode {
     ExitCode::SUCCESS
 }
 
-fn print_file_content(repo: &Repo, path: &Path) {
+fn get_codeblock_lang(path: &Path) -> String {
+    match path.extension().and_then(|e| e.to_str()) {
+        Some("md") | Some("markdown") => "markdown".to_string(),
+        Some("rs") => "rust".to_string(),
+        Some("txt") => "text".to_string(),
+        Some(ext) if !ext.is_empty() => ext.to_lowercase(),
+        _ => "text".to_string(),
+    }
+}
+
+fn format_file_content(repo: &Repo, path: &Path) -> String {
     let rel = repo.relative_display_path(path);
-    println!("{}", rel);
+    let lang = get_codeblock_lang(path);
+    let mut out = String::new();
+    out.push_str(&rel);
+    out.push('\n');
     match fs::read_to_string(path) {
         Ok(content) => {
-            if content.ends_with('\n') {
-                print!("{}", content);
-            } else {
-                println!("{}", content);
+            out.push_str(&format!("```{}\n", lang));
+            out.push_str(&content);
+            if !content.ends_with('\n') {
+                out.push('\n');
             }
+            out.push_str("```\n");
         }
         Err(e) => {
             eprintln!("error reading file {}: {}", rel, e);
         }
     }
+    out
+}
+
+fn print_file_content(repo: &Repo, path: &Path) {
+    let formatted = format_file_content(repo, path);
+    crate::renderer::render_markdown(&formatted);
 }
 
 /// Returns a list of unresolved blocking items (relative paths and symlink targets) under child subdirectories of `task_file`.

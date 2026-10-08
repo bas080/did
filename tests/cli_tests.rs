@@ -90,7 +90,7 @@ fn test_show_hook_sibling_and_ancestor() {
     assert!(success);
     assert_eq!(
         stdout.trim(),
-        "backend/.hooks/show\nBackend ancestor guidelines\n\nbackend/auth/.hooks/show\nAuth sibling guidelines\n\nbackend/auth/jwt.md\nJWT implementation"
+        "backend/.hooks/show\n```text\nBackend ancestor guidelines\n```\n\nbackend/auth/.hooks/show\n```text\nAuth sibling guidelines\n```\n\nbackend/auth/jwt.md\n```markdown\nJWT implementation\n```"
     );
 }
 
@@ -1374,4 +1374,62 @@ fn test_executable_help_hook() {
         assert!(success);
         assert!(stdout.contains("CUSTOM HELP HOOK RUNNING"));
     }
+}
+
+#[test]
+fn test_show_codeblock_formatting_and_extensions() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    fs::create_dir_all(root.join(".did")).unwrap();
+
+    did_cmd(root, &["add", "task.md", "-m", "# Task Title\nTask body"]);
+    did_cmd(root, &["add", "script.rs", "-m", "fn main() {}"]);
+    did_cmd(root, &["add", "notes.txt", "-m", "Plain notes"]);
+    did_cmd(root, &["add", "rawfile", "-m", "No extension content"]);
+
+    let (_, stdout_md, _) = did_cmd(root, &["show", "task.md"]);
+    assert!(stdout_md.contains("```markdown\n# Task Title"));
+
+    let (_, stdout_rs, _) = did_cmd(root, &["show", "script.rs"]);
+    assert!(stdout_rs.contains("```rust\nfn main() {}"));
+
+    let (_, stdout_txt, _) = did_cmd(root, &["show", "notes.txt"]);
+    assert!(stdout_txt.contains("```text\nPlain notes"));
+
+    let (_, stdout_raw, _) = did_cmd(root, &["show", "rawfile"]);
+    assert!(stdout_raw.contains("```text\nNo extension content"));
+}
+
+#[test]
+fn test_markdown_renderer_and_color_optout() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    fs::create_dir_all(root.join(".did")).unwrap();
+    did_cmd(root, &["add", "task.md", "-m", "# Title"]);
+
+    // With FORCE_COLOR=1, color rendering is forced
+    let (s_force, stdout_force, _) = did_cmd_env(root, &["show", "task.md"], &[("FORCE_COLOR", "1")]);
+    assert!(s_force);
+    assert!(!stdout_force.is_empty());
+
+    // With NO_COLOR=1, color rendering is opted out
+    let (s_nocolor, stdout_nocolor, _) =
+        did_cmd_env(root, &["show", "task.md"], &[("FORCE_COLOR", "1"), ("NO_COLOR", "1")]);
+    assert!(s_nocolor);
+    assert!(stdout_nocolor.contains("task.md"));
+    assert!(stdout_nocolor.contains("```markdown"));
+
+    // With DID_NO_COLOR=1, color rendering is opted out
+    let (s_didno, stdout_didno, _) =
+        did_cmd_env(root, &["show", "task.md"], &[("FORCE_COLOR", "1"), ("DID_NO_COLOR", "1")]);
+    assert!(s_didno);
+    assert!(stdout_didno.contains("```markdown"));
+
+    // With DID_COLOR=0, color rendering is opted out
+    let (s_didc0, stdout_didc0, _) =
+        did_cmd_env(root, &["show", "task.md"], &[("FORCE_COLOR", "1"), ("DID_COLOR", "0")]);
+    assert!(s_didc0);
+    assert!(stdout_didc0.contains("```markdown"));
 }
