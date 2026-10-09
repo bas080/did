@@ -97,12 +97,12 @@ pub fn run(repo_opt: Option<Repo>, command: Commands, global_all: bool) -> ExitC
             };
             cmd_status(&repo, path.as_deref(), tree, blocked, global_all)
         }
-        Commands::Query { query, path, line_number } => {
+        Commands::Query { query, path, line_number, tree } => {
             let repo = match require_repo(repo_opt) {
                 Ok(r) => r,
                 Err(code) => return code,
             };
-            cmd_search(&repo, &query, path.as_deref(), line_number, global_all)
+            cmd_search(&repo, &query, path.as_deref(), line_number, tree, global_all)
         }
         Commands::Show { path } => {
             let repo = match require_repo(repo_opt) {
@@ -651,7 +651,7 @@ fn cmd_status(repo: &Repo, raw_path: Option<&Path>, tree: bool, only_blocked: bo
     ExitCode::SUCCESS
 }
 
-fn cmd_search(repo: &Repo, query: &str, raw_path: Option<&Path>, show_line_num: bool, all: bool) -> ExitCode {
+fn cmd_search(repo: &Repo, query: &str, raw_path: Option<&Path>, show_line_num: bool, tree: bool, all: bool) -> ExitCode {
     let root_path = match raw_path {
         Some(p) => repo.resolve_path(p),
         None => repo.did_dir.clone(),
@@ -685,6 +685,7 @@ fn cmd_search(repo: &Repo, query: &str, raw_path: Option<&Path>, show_line_num: 
 
     let query_lower = query.to_lowercase();
     let mut results = Vec::new();
+    let mut tree_items = Vec::new();
 
     for entry in WalkDir::new(&root_path)
         .into_iter()
@@ -702,11 +703,12 @@ fn cmd_search(repo: &Repo, query: &str, raw_path: Option<&Path>, show_line_num: 
         if is_file || is_symlink {
             let file_name = path.file_name().unwrap_or_default().to_string_lossy();
             let is_hidden = file_name.starts_with('.');
+            let is_blocked = !is_hidden && repo.has_unresolved_subitems(path);
 
             let should_include = if all {
                 true
             } else {
-                !is_hidden && !repo.has_unresolved_subitems(path)
+                !is_hidden && !is_blocked
             };
 
             if should_include {
@@ -733,7 +735,16 @@ fn cmd_search(repo: &Repo, query: &str, raw_path: Option<&Path>, show_line_num: 
                     Vec::new()
                 };
 
+                let status_indicator = if is_hidden {
+                    "☑"
+                } else if is_blocked {
+                    "☒"
+                } else {
+                    "☐"
+                };
+
                 if !content_matches.is_empty() {
+                    tree_items.push((rel_display.clone(), status_indicator));
                     for (line_num, snippet) in content_matches {
                         if show_line_num {
                             results.push(format!("{}:{}: {}", rel_display, line_num, snippet));
@@ -742,6 +753,7 @@ fn cmd_search(repo: &Repo, query: &str, raw_path: Option<&Path>, show_line_num: 
                         }
                     }
                 } else if matches_path {
+                    tree_items.push((rel_display.clone(), status_indicator));
                     results.push(rel_display);
                 }
             }
@@ -750,8 +762,18 @@ fn cmd_search(repo: &Repo, query: &str, raw_path: Option<&Path>, show_line_num: 
 
     results.sort();
     results.dedup();
+    tree_items.sort_by(|a, b| a.0.cmp(&b.0));
+    tree_items.dedup_by(|a, b| a.0 == b.0);
 
-    print_results_with_limit(results, "No matching tasks found.");
+    if tree {
+        if tree_items.is_empty() {
+            eprintln!("No matching tasks found.");
+        } else {
+            print_tree_view(&root_path, &tree_items, repo);
+        }
+    } else {
+        print_results_with_limit(results, "No matching tasks found.");
+    }
 
     ExitCode::SUCCESS
 }

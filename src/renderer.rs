@@ -320,18 +320,18 @@ fn make_skin() -> MadSkin {
         header.align = termimad::Alignment::Left;
     }
 
-    // Rainbow Unicorn Palette
-    skin.headers[0].set_fg(Color::AnsiValue(205)); // # Header 1: Hot Pink
-    skin.headers[1].set_fg(Color::AnsiValue(51));  // ## Header 2: Neon Cyan
-    skin.headers[2].set_fg(Color::AnsiValue(226)); // ### Header 3: Bright Yellow
-    skin.bold.set_fg(Color::AnsiValue(46));        // **Bold**: Neon Green
-    skin.italic.set_fg(Color::AnsiValue(183));     // *Italic*: Lavender
+    // Standard terminal color scheme adapting to user's terminal visuals
+    skin.headers[0].set_fg(Color::Magenta);  // # Header 1: Magenta
+    skin.headers[1].set_fg(Color::Cyan);     // ## Header 2: Cyan
+    skin.headers[2].set_fg(Color::Yellow);   // ### Header 3: Yellow
+    skin.bold.set_fg(Color::Green);          // **Bold**: Green
+    skin.italic.set_fg(Color::Magenta);      // *Italic*: Magenta
 
-    // High-contrast inline codeblock (no background, bright magenta foreground)
-    skin.inline_code.set_fg(Color::AnsiValue(201)); // `Code`: Bright Magenta
+    // High-contrast inline codeblock inheriting standard terminal colors
+    skin.inline_code.set_fg(Color::Yellow);  // `Code`: Yellow
     skin.inline_code.set_bg(Color::Reset);
 
-    skin.bullet.set_fg(Color::AnsiValue(208));     // - Bullet: Pastel Coral
-    skin.quote_mark.set_fg(Color::AnsiValue(37));  // > Quote: Dark Cyan
+    skin.bullet.set_fg(Color::Yellow);       // - Bullet: Yellow
+    skin.quote_mark.set_fg(Color::Cyan);     // > Quote: Cyan
     skin
 }

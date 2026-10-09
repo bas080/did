@@ -56,6 +56,10 @@ pub enum Commands {
         /// Print 1-based line numbers for matching content snippets
         #[arg(short = 'n', long = "line-number")]
         line_number: bool,
+
+        /// Display search results in a tree structure
+        #[arg(short = 't', long = "tree")]
+        tree: bool,
     },
 
     /// Print task contents at PATH (requires sub-items done unless -a)
