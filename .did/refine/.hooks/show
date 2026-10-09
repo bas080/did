@@ -1,44 +1,13 @@
-# Refinement Process Guidelines (`.did/refine`)
+```markdown
+# Issue Title
 
-The `.did/refine/` directory is the staging area for new, vague, or incomplete issues and feature proposals. Before an issue can be placed on the roadmap or picked up for implementation (`.did/implement/`), it must go through a structured refinement process to ensure requirements are crystal clear.
+## Goal
+Short description of what needs to be accomplished.
 
----
+## Requirements
+- Clear functional requirement 1
+- Clear functional requirement 2
 
-## The Issue Refinement Process
-
-Every issue in `.did/refine/` must be systematically expanded until it satisfies all items on the **Refinement Checklist**:
-
-### 1. Clear Problem Statement & Context
-- What is the exact user pain point or missing capability?
-- Why is this feature or bug fix needed?
-
-### 2. User Feedback Tagging (`@bas080`)
-- **User Question Tagging**: Whenever an issue in `.did/refine/` is marked or tagged with `@bas080`, the tag MUST be accompanied by an explicit question directed to `@bas080` outlining the required feedback or clarification.
-
-### 3. Feature Conflicts & System Interaction
-- **Document Feature Conflicts**: Identify and document any conflicting interactions with existing features or CLI subcommands that require investigation.
-- **Identify Tool Shortcomings**: Document any usability friction, ambiguities, or tool shortcomings that inhibit AI agents or human developers from using `did` effectively.
-- **Streamline CLI Usage**: Propose ways to streamline, simplify, or optimize the `did` CLI interface.
-
-### 4. Explicit Functional Requirements
-- **CLI Interface**: Exact command syntax, subcommand name, arguments, and flags.
-- **Environment Variables**: Names of environment variables (e.g. `DID_STATUS_LIMIT`), defaults, and override rules.
-- **Output Specifications**: Exact formatting for `stdout` and `stderr` outputs.
-- **Exit Codes**: Explicit exit codes (`0` for success, non-zero for failures/blocked tasks).
-
-### 5. Edge Cases & Failure Modes
-- How should the feature behave when paths do not exist, target files are directories, or symlinks are broken?
-- How are conflicts, duplicates, or empty result sets handled?
-
-### 6. Dependency & Blocking Analysis
-- Does this task depend on other tasks or features?
-- How does it fit into the task dependency tree without creating artificial bottlenecks or circular links?
-
-### 7. Concrete Test Cases
-- What specific integration and unit test scenarios are required to verify the implementation?
-
----
-
-## Transitioning Refined Issues
-
-- **Ready for Implementation**: Once an issue meets the Refinement Checklist, move it to `.did/implement/`.
+## Questions
+- [ ] @bas080: Clarification needed?
+```

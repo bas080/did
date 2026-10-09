@@ -762,7 +762,7 @@ fn get_status_limit() -> Option<usize> {
 }
 
 
-fn print_tree_view(root_path: &Path, items: &[(String, &'static str)], repo: &Repo) {
+fn print_tree_view(_root_path: &Path, items: &[(String, &'static str)], _repo: &Repo) {
     use std::collections::BTreeMap;
 
     struct MapNode {
@@ -790,29 +790,28 @@ fn print_tree_view(root_path: &Path, items: &[(String, &'static str)], repo: &Re
         }
     }
 
-    fn print_map_node(map: &BTreeMap<String, MapNode>, prefix: &str) {
-        let count = map.len();
-        for (i, (name, node)) in map.iter().enumerate() {
-            let is_last = i == count - 1;
-            let branch = if is_last { "└── " } else { "├── " };
-            let child_prefix = if is_last { "    " } else { "│   " };
-
-            let label = if let Some(ind) = node.indicator {
-                format!("{} {}", ind, name)
+    fn build_markdown_tree(map: &BTreeMap<String, MapNode>, depth: usize, out: &mut String) {
+        let indent = "  ".repeat(depth);
+        for (name, node) in map {
+            if node.children.len() == 1 && node.indicator.is_none() {
+                // Skip directory branch if it has only one child
+                build_markdown_tree(&node.children, depth, out);
             } else {
-                name.clone()
-            };
-
-            println!("{}{}{}", prefix, branch, label);
-            if !node.children.is_empty() {
-                print_map_node(&node.children, &format!("{}{}", prefix, child_prefix));
+                if let Some(ind) = node.indicator {
+                    out.push_str(&format!("{}* {} {}\n", indent, ind, name));
+                } else {
+                    out.push_str(&format!("{}* {}\n", indent, name));
+                }
+                if !node.children.is_empty() {
+                    build_markdown_tree(&node.children, depth + 1, out);
+                }
             }
         }
     }
 
-    let root_label = repo.relative_display_path(root_path);
-    println!("{}", root_label);
-    print_map_node(&root_map, "");
+    let mut tree_md = String::new();
+    build_markdown_tree(&root_map, 0, &mut tree_md);
+    crate::renderer::render_markdown(&tree_md);
 }
 
 fn print_results_with_limit(results: Vec<String>, empty_msg: &str) {
@@ -964,8 +963,7 @@ fn run_ancestor_hooks(repo: &Repo, start_path: &Path, env_spec: HookEnv) -> Resu
                             if printed_any {
                                 println!();
                             }
-                            let hook_rel = repo.relative_display_path(&hook_p);
-                            crate::renderer::draw_box(&hook_rel, &stdout_str, crate::renderer::BoxStyle::Hook);
+                            crate::renderer::draw_box("", &stdout_str, crate::renderer::BoxStyle::Hook);
                             printed_any = true;
                         }
                         let stderr_str = String::from_utf8_lossy(&out.stderr);
@@ -989,9 +987,8 @@ fn run_ancestor_hooks(repo: &Repo, start_path: &Path, env_spec: HookEnv) -> Resu
                 if printed_any {
                     println!();
                 }
-                let hook_rel = repo.relative_display_path(&hook_p);
                 if let Ok(content) = fs::read_to_string(&hook_p) {
-                    crate::renderer::draw_box(&hook_rel, &content, crate::renderer::BoxStyle::Hook);
+                    crate::renderer::draw_box("", &content, crate::renderer::BoxStyle::Hook);
                 }
                 printed_any = true;
             }
@@ -1401,7 +1398,7 @@ fn cmd_test(repo: &Repo) -> ExitCode {
                     "show" | "status" | "done" | "close" | "undone" | "open" | "add" | "link" | "blocks" | "mv" | "move" | "test" | "query" | "remove" | "help"
                 ) {
                     violations.push(format!(
-                        "Invalid file in hook directory: '{}' (reserved hook names are show, status, done, add, link, mv, test, query)",
+                        "Invalid file in hook directory: '{}' (reserved hook names are show, status, close, open, add, blocks, mv, test, query, remove, help)",
                         rel_display
                     ));
                 }
