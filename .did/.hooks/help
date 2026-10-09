@@ -1,12 +1,7 @@
-# Directory Organization & Location Guide (`.did/.hooks/help`)
+# Directory Organization Guide
 
-Where to find tasks and issues inside `.did/`:
+Task and issue locations inside `.did/`:
 - `.did/refine/`: Staging area for new, unrefined, or open proposal issues requiring clarification.
-- `.did/backlog/`: Long-term ideas and non-core extensions that are not currently being refined or prioritized.
 - `.did/implement/`: Ready-to-work issues with 100% complete specifications and concrete test plans.
 - `.did/wont/`: Rejected proposals and feature design decisions with rationale for not adopting.
-- `.did/.hooks/`: Reserved lifecycle hook scripts (`show`, `status`, `done`, `add`, `blocks`/`link`, `mv`/`move`, `test`, `query`, `remove`, `help`).
-
-## Issue Creation Guidelines
-When creating an issue that describes a change to the output behavior of `did` (e.g., changing how `did status` or `did show` prints information):
-- You MUST include "Before" and "After" output examples (using a `### Expected Output` section with markdown codeblocks) to clarify the desired change.
+- `.did/backlog/`: Long-term ideas and non-core extensions.
