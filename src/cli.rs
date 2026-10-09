@@ -78,8 +78,12 @@ pub enum Commands {
     /// Mark a resolved PATH as open/undone (removes leading dot; updates symlinks)
     #[command(alias = "undone")]
     Open {
-        /// Resolved task file path
+        /// Resolved task file path or directory
         path: PathBuf,
+
+        /// Reopen all resolved tasks inside directory recursively
+        #[arg(short = 'r', long = "recursive")]
+        recursive: bool,
     },
 
     /// Symlink TARGET into DEST directory using TARGET's basename

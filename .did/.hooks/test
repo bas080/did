@@ -33,20 +33,20 @@ if [ -n "$UNTAGGED_REFINE" ]; then
     exit 1
 fi
 
-# Verify that all DID_ environment variables referenced in src/ are documented in README.md
+# Verify that all DID_ environment variables referenced in src/ are documented in README.md or ADVANCED.md
 UNDOCUMENTED_ENV=""
 for env_var in $(grep -oE "DID_[A_Z0-9_]+" src/*.rs | cut -d: -f2 | sort -u); do
     case "$env_var" in
         DID_EVENT|DID_TARGET|DID_DEST|DID_OLD|DID_NEW|DID_REPO_ROOT|DID_STATE_DIR) continue ;;
     esac
-    if ! grep -q "$env_var" README.md; then
+    if ! grep -q "$env_var" README.md && ! grep -q "$env_var" ADVANCED.md; then
         UNDOCUMENTED_ENV="$UNDOCUMENTED_ENV
   - $env_var"
     fi
 done
 
 if [ -n "$UNDOCUMENTED_ENV" ]; then
-    echo "error: environment variables referenced in src/ missing documentation in README.md:" >&2
+    echo "error: environment variables referenced in src/ missing documentation in README.md or ADVANCED.md:" >&2
     echo "$UNDOCUMENTED_ENV" >&2
     exit 1
 fi

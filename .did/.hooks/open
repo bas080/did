@@ -1,0 +1,3 @@
+# Task Reopening Guidelines (`.did/.hooks/open`)
+
+- Reopening a task restores it to active state and updates dependent symlinks across `.did/`.

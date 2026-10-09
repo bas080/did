@@ -118,12 +118,12 @@ pub fn run(repo_opt: Option<Repo>, command: Commands, global_all: bool) -> ExitC
             };
             cmd_done(&repo, &path, recursive)
         }
-        Commands::Open { path } => {
+        Commands::Open { path, recursive } => {
             let repo = match require_repo(repo_opt) {
                 Ok(r) => r,
                 Err(code) => return code,
             };
-            cmd_undone(&repo, &path)
+            cmd_undone(&repo, &path, recursive)
         }
         Commands::Test => {
             let repo = match require_repo(repo_opt) {
@@ -587,7 +587,7 @@ fn cmd_status(repo: &Repo, raw_path: Option<&Path>, tree: bool, only_blocked: bo
         if is_file || is_symlink {
             let file_name = path.file_name().unwrap_or_default().to_string_lossy();
             let is_hidden = file_name.starts_with('.');
-            let is_blocked = !is_hidden && has_unresolved_subitems(repo, path);
+            let is_blocked = !is_hidden && repo.has_unresolved_subitems(path);
 
             if is_hidden {
                 closed_count += 1;
@@ -605,11 +605,11 @@ fn cmd_status(repo: &Repo, raw_path: Option<&Path>, tree: bool, only_blocked: bo
 
             if include_in_output {
                 let status_indicator = if is_hidden {
-                    "- [x]"
+                    "☑"
                 } else if is_blocked {
-                    "- [!]"
+                    "☒"
                 } else {
-                    "- [ ]"
+                    "☐"
                 };
                 items.push((repo.relative_display_path(path), status_indicator));
             }
@@ -695,7 +695,7 @@ fn cmd_search(repo: &Repo, query: &str, raw_path: Option<&Path>, show_line_num: 
             let should_include = if all {
                 true
             } else {
-                !is_hidden && !has_unresolved_subitems(repo, path)
+                !is_hidden && !repo.has_unresolved_subitems(path)
             };
 
             if should_include {
@@ -798,7 +798,7 @@ fn print_tree_view(_root_path: &Path, items: &[(String, &'static str)], _repo: &
                 build_markdown_tree(&node.children, depth, out);
             } else {
                 if let Some(ind) = node.indicator {
-                    out.push_str(&format!("{}* {} {}\n", indent, ind, name));
+                    out.push_str(&format!("{} {} {}\n", indent, ind, name));
                 } else {
                     out.push_str(&format!("{}* {}\n", indent, name));
                 }
@@ -1074,7 +1074,7 @@ fn cmd_show(repo: &Repo, raw_path: &Path, _all: bool) -> ExitCode {
         return ExitCode::FAILURE;
     }
 
-    let blocking = get_unresolved_blocking_items(repo, &target_path);
+    let blocking = repo.get_unresolved_blocking_items(&target_path);
     if !blocking.is_empty() {
         if crate::renderer::should_color() {
             let mut block_md = String::from("### Blocked by unresolved sub-items:\n\n");
@@ -1177,7 +1177,7 @@ fn cmd_done(repo: &Repo, raw_path: &Path, recursive: bool) -> ExitCode {
 
         // Validate that no task has blocking items OUTSIDE target_path
         for task in &tasks {
-            let blocking = get_unresolved_blocking_items(repo, task);
+            let blocking = repo.get_unresolved_blocking_items(task);
             let external_blocking: Vec<_> = blocking
                 .into_iter()
                 .filter(|item| {
@@ -1225,7 +1225,7 @@ fn cmd_done_single(repo: &Repo, target_path: &Path) -> ExitCode {
         return ExitCode::SUCCESS;
     }
 
-    let blocking = get_unresolved_blocking_items(repo, target_path);
+    let blocking = repo.get_unresolved_blocking_items(target_path);
     if !blocking.is_empty() {
         eprintln!(
             "error: cannot mark task '{}' done: unresolved sub-items remain:",
@@ -1269,7 +1269,7 @@ fn cmd_done_single(repo: &Repo, target_path: &Path) -> ExitCode {
     ExitCode::SUCCESS
 }
 
-fn cmd_undone(repo: &Repo, raw_path: &Path) -> ExitCode {
+fn cmd_undone(repo: &Repo, raw_path: &Path, recursive: bool) -> ExitCode {
     let mut target_path = repo.resolve_path(raw_path);
 
     if !target_path.exists() && fs::symlink_metadata(&target_path).is_err() {
@@ -1297,14 +1297,47 @@ fn cmd_undone(repo: &Repo, raw_path: &Path) -> ExitCode {
         }
     };
 
-    if meta.is_dir() {
-        eprintln!(
-            "error: cannot undone a directory: {}",
-            repo.relative_display_path(&target_path)
-        );
-        return ExitCode::FAILURE;
-    }
+    let is_dir = meta.is_dir() && !target_path.is_symlink();
 
+    if is_dir {
+        if !recursive {
+            eprintln!(
+                "error: cannot undone a directory: {}",
+                repo.relative_display_path(&target_path)
+            );
+            return ExitCode::FAILURE;
+        }
+
+        // Collect all resolved task files in directory
+        let mut tasks = Vec::new();
+        for entry in WalkDir::new(&target_path)
+            .into_iter()
+            .filter_entry(should_visit_entry)
+            .filter_map(|e| e.ok())
+        {
+            let p = entry.path();
+            if is_reserved_hook_file(p) || p.is_dir() {
+                continue;
+            }
+            let name = p.file_name().unwrap_or_default().to_string_lossy();
+            if name.starts_with('.') {
+                tasks.push(p.to_path_buf());
+            }
+        }
+
+        for task in tasks {
+            if cmd_undone_single(repo, &task) != ExitCode::SUCCESS {
+                return ExitCode::FAILURE;
+            }
+        }
+
+        ExitCode::SUCCESS
+    } else {
+        cmd_undone_single(repo, &target_path)
+    }
+}
+
+fn cmd_undone_single(repo: &Repo, target_path: &Path) -> ExitCode {
     let file_name = match target_path.file_name() {
         Some(name) => name.to_string_lossy(),
         None => {
@@ -1316,8 +1349,25 @@ fn cmd_undone(repo: &Repo, raw_path: &Path) -> ExitCode {
     if !file_name.starts_with('.') {
         eprintln!(
             "error: task '{}' is not resolved (does not start with a dot)",
-            repo.relative_display_path(&target_path)
+            repo.relative_display_path(target_path)
         );
+        return ExitCode::FAILURE;
+    }
+
+    let target_rel = repo.relative_display_path(target_path);
+    if run_ancestor_hooks(
+        repo,
+        target_path,
+        HookEnv {
+            event: "open",
+            target: Some(&target_rel),
+            dest: None,
+            old: None,
+            new: None,
+        },
+    )
+    .is_err()
+    {
         return ExitCode::FAILURE;
     }
 
@@ -1333,13 +1383,13 @@ fn cmd_undone(repo: &Repo, raw_path: &Path) -> ExitCode {
         return ExitCode::FAILURE;
     }
 
-    if let Err(e) = fs::rename(&target_path, &new_target_path) {
+    if let Err(e) = fs::rename(target_path, &new_target_path) {
         eprintln!("error marking task undone: {}", e);
         return ExitCode::FAILURE;
     }
 
     // Update symlinks pointing to target_path across .did
-    update_symlinks(repo, &target_path, &new_target_path);
+    update_symlinks(repo, target_path, &new_target_path);
 
     ExitCode::SUCCESS
 }
@@ -1649,89 +1699,6 @@ fn print_file_content(repo: &Repo, path: &Path) {
     }
 }
 
-/// Returns a list of unresolved blocking items (relative paths and symlink targets) under child subdirectories of `task_file`.
-fn get_unresolved_blocking_items(repo: &Repo, task_file: &Path) -> Vec<String> {
-    let parent_dir = match task_file.parent() {
-        Some(p) => p,
-        None => return Vec::new(),
-    };
-
-    let is_top_category = parent_dir.parent() == Some(&repo.did_dir) || parent_dir == repo.did_dir;
-    let task_stem = task_file.file_stem().unwrap_or_default().to_string_lossy();
-    let mut items = Vec::new();
-
-    if task_stem == "index" {
-        collect_unresolved_in_dir(repo, parent_dir, &mut items);
-        let self_rel = repo.relative_display_path(task_file);
-        items.retain(|item| item != &self_rel);
-    } else {
-        if let Ok(entries) = fs::read_dir(parent_dir) {
-            for entry in entries.flatten() {
-                let p = entry.path();
-                if p == task_file {
-                    continue;
-                }
-                let is_symlink = p.is_symlink();
-                if p.is_dir() && !is_symlink {
-                    let dir_name = p.file_name().unwrap_or_default().to_string_lossy();
-                    if dir_name.starts_with('.') {
-                        continue;
-                    }
-                    if is_top_category {
-                        if dir_name == task_stem {
-                            collect_unresolved_in_dir(repo, &p, &mut items);
-                        }
-                    } else {
-                        collect_unresolved_in_dir(repo, &p, &mut items);
-                    }
-                }
-            }
-        }
-    }
-
-    items.sort();
-    items.dedup();
-
-    if !items.is_empty() && std::env::var("DID_DEBUG").map(|v| !v.is_empty()).unwrap_or(false) {
-        eprintln!(
-            "[DEBUG] Blocking check for '{}': {} unresolved child sub-items found",
-            repo.relative_display_path(task_file),
-            items.len()
-        );
-    }
-
-    items
-}
-
-fn collect_unresolved_in_dir(repo: &Repo, dir: &Path, items: &mut Vec<String>) {
-    let dir_name = dir.file_name().unwrap_or_default().to_string_lossy();
-    if dir_name.starts_with('.') {
-        return;
-    }
-    for entry in WalkDir::new(dir).into_iter().filter_map(|e| e.ok()) {
-        let p = entry.path();
-        if is_reserved_hook_file(p) {
-            continue;
-        }
-        let name = p.file_name().unwrap_or_default().to_string_lossy();
-        if name.starts_with('.') {
-            continue;
-        }
-        if p.is_symlink() {
-            let target_str = fs::read_link(p)
-                .map(|t| t.to_string_lossy().to_string())
-                .unwrap_or_default();
-            items.push(format!("{} -> {}", repo.relative_display_path(p), target_str));
-        } else if p.is_file() {
-            items.push(repo.relative_display_path(p));
-        }
-    }
-}
-
-/// Checks if a task file has any unresolved sub-items (deeper subdirectories).
-fn has_unresolved_subitems(repo: &Repo, task_file: &Path) -> bool {
-    !get_unresolved_blocking_items(repo, task_file).is_empty()
-}
 
 fn normalize_path(path: &Path) -> PathBuf {
     let mut components = Vec::new();
