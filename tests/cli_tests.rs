@@ -172,7 +172,7 @@ fn test_status_and_hierarchy() {
     // Status -t -a (tree mode with all) shows closed task with [x]
     let (success_tree_a, stdout_tree_a, _) = did_cmd(root, &["status", "-t", "-a"]);
     assert!(success_tree_a);
-    assert!(stdout_tree_a.contains("[x] .c.md"));
+    assert!(stdout_tree_a.contains("- [x] sub/.c.md") || stdout_tree_a.contains("[x] sub/.c.md"));
 }
 
 #[test]

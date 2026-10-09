@@ -610,9 +610,9 @@ fn cmd_status(repo: &Repo, raw_path: Option<&Path>, tree: bool, only_blocked: bo
 
             if include_in_output {
                 let status_indicator = if is_hidden {
-                    "[x]"
+                    "- [x]"
                 } else {
-                    "[ ]"
+                    "- [ ]"
                 };
                 items.push((repo.relative_display_path(path), status_indicator, is_blocked));
             }
@@ -734,9 +734,9 @@ fn cmd_search(repo: &Repo, query: &str, raw_path: Option<&Path>, show_line_num: 
                 };
 
                 let status_indicator = if is_hidden {
-                    "[x]"
+                    "- [x]"
                 } else {
-                    "[ ]"
+                    "- [ ]"
                 };
 
                 if !content_matches.is_empty() {
@@ -822,72 +822,51 @@ fn print_tree_view(_root_path: &Path, items: &[(String, &'static str, bool)], _r
         }
     }
 
-    fn build_markdown_tree(map: &BTreeMap<String, MapNode>, prefix: &str, depth: usize, use_color: bool, out: &mut String) {
-        let mut files = Vec::new();
-        let mut dirs = Vec::new();
+    fn get_single_leaf_path(name: &str, node: &MapNode) -> Option<(String, &'static str, bool)> {
+        if let Some(ind) = node.indicator {
+            if node.children.is_empty() {
+                return Some((name.to_string(), ind, node.is_blocked));
+            }
+        }
+        if node.children.len() == 1 {
+            let (child_name, child_node) = node.children.iter().next().unwrap();
+            if let Some((sub_path, ind, is_blocked)) = get_single_leaf_path(child_name, child_node) {
+                return Some((format!("{}/{}", name, sub_path), ind, is_blocked));
+            }
+        }
+        None
+    }
+
+    fn build_markdown_tree(map: &BTreeMap<String, MapNode>, depth: usize, out: &mut String) {
+        let indent = "  ".repeat(depth);
+        let mut single_items = Vec::new();
+        let mut multi_dirs = Vec::new();
 
         for (name, node) in map {
-            if node.indicator.is_some() && node.children.is_empty() {
-                files.push((name, node));
+            if let Some((collapsed_path, ind, is_blocked)) = get_single_leaf_path(name, node) {
+                single_items.push((collapsed_path, ind, is_blocked));
             } else {
-                dirs.push((name, node));
+                multi_dirs.push((name, node));
             }
         }
 
-        let total = files.len() + dirs.len();
-        let mut idx = 0;
-
-        for (name, node) in files {
-            idx += 1;
-            let is_last = idx == total;
-            let connector = if depth == 0 { "" } else if is_last { "└── " } else { "├── " };
-            let ind = node.indicator.unwrap();
-
-            if use_color {
-                let ind_colored = if ind == "[x]" {
-                    "\x1b[32m[x]\x1b[0m"
-                } else {
-                    "\x1b[33m[ ]\x1b[0m"
-                };
-                if node.is_blocked {
-                    out.push_str(&format!("{}{}{} \x1b[35m\x1b[3m{}\x1b[0m \x1b[90m(blocked)\x1b[0m\n", prefix, connector, ind_colored, name));
-                } else {
-                    out.push_str(&format!("{}{}{} {}\n", prefix, connector, ind_colored, name));
-                }
+        for (path, ind, is_blocked) in single_items {
+            if is_blocked {
+                out.push_str(&format!("{}{} *{}* *(blocked)*\n", indent, ind, path));
             } else {
-                if node.is_blocked {
-                    out.push_str(&format!("{}{}{} {} (blocked)\n", prefix, connector, ind, name));
-                } else {
-                    out.push_str(&format!("{}{}{} {}\n", prefix, connector, ind, name));
-                }
+                out.push_str(&format!("{}{} {}\n", indent, ind, path));
             }
         }
 
-        for (name, node) in dirs {
-            idx += 1;
-            let is_last = idx == total;
-            let connector = if depth == 0 { "" } else if is_last { "└── " } else { "├── " };
-            let child_indent = if depth == 0 { "  " } else if is_last { "    " } else { "│   " };
-
-            if use_color {
-                out.push_str(&format!("{}{}\x1b[1m\x1b[36m{}/\x1b[0m\n", prefix, connector, name));
-            } else {
-                out.push_str(&format!("{}{}{}/\n", prefix, connector, name));
-            }
-            if !node.children.is_empty() {
-                build_markdown_tree(&node.children, &format!("{}{}", prefix, child_indent), depth + 1, use_color, out);
-            }
+        for (name, node) in multi_dirs {
+            out.push_str(&format!("{}- **{}/**\n", indent, name));
+            build_markdown_tree(&node.children, depth + 1, out);
         }
     }
 
     let mut tree_md = String::new();
-    let use_color = crate::renderer::should_color();
-    build_markdown_tree(&root_map, "", 0, use_color, &mut tree_md);
-    if tree_md.ends_with('\n') {
-        print!("{}", tree_md);
-    } else {
-        println!("{}", tree_md);
-    }
+    build_markdown_tree(&root_map, 0, &mut tree_md);
+    crate::renderer::render_markdown(&tree_md);
 }
 
 fn print_results_with_limit(results: Vec<String>, empty_msg: &str) {
