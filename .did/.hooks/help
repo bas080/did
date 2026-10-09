@@ -1,3 +1,7 @@
+if [ -n "$DID_TOPIC" ]; then
+    exit 0
+fi
+
 # Directory Organization Guide
 
 Task and issue locations inside `.did/`:

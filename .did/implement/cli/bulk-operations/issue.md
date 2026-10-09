@@ -22,6 +22,7 @@ Safely remove multiple tasks and their associated symlinks.
 
 ## Implementation Requirements
 - **Argument Handling**: `did` will treat all arguments except the final one (in the case of `mv`) as target paths.
+- **Hook Execution**: Lifecycle hooks (`mv`, `close`/`done`, `rm`) MUST be invoked for each individual item in a bulk operation.
 - **Error Handling**: If any operation in a bulk set fails, the command must **stop immediately** at the first error and report the failure.
 - **Safety**: Rely on the `-r` flag for explicit recursive intent and Git version control for recovery from accidental deletions.
 

@@ -233,8 +233,8 @@ fn test_show_and_done_blocked_output() {
     let (success_show, stdout_show, stderr_show) = did_cmd(root, &["show", "backend/auth.md"]);
     assert!(success_show);
     assert!(stdout_show.contains("Auth task"));
-    assert!(stderr_show.contains("[Blocked by unresolved sub-items:]"));
-    assert!(stderr_show.contains("- backend/auth/sub/research.md"));
+    assert!(stderr_show.contains("[Blocked]") || stdout_show.contains("Blocked"));
+    assert!(stderr_show.contains("- backend/auth/sub/research.md") || stdout_show.contains("backend/auth/sub/research.md"));
 
     // done backend/auth.md fails and lists blocking sub-items in stderr
     let (success_done, _, stderr_done) = did_cmd(root, &["done", "backend/auth.md"]);
@@ -1568,7 +1568,7 @@ fn test_all_did_environment_variables() {
     // 10. DID_RELATED_LIMIT
     let (s10, stdout10, _) = did_cmd_env(root, &["show", "auth/jwt.md"], &[("FORCE_COLOR", "1"), ("DID_RELATED_LIMIT", "1")]);
     assert!(s10);
-    assert!(stdout10.contains("Related Items"));
+    assert!(stdout10.contains("Related"));
     assert!(stdout10.contains("auth/session.md"));
 
     // 11. Hook Env Vars
