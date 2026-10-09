@@ -163,16 +163,16 @@ fn test_status_and_hierarchy() {
     let (_, stdout_stat_a, _) = did_cmd(root, &["status", "-a"]);
     assert!(stdout_stat_a.contains("backend/auth/sub/.c.md"));
 
-    // Status -t (tree mode) shows actionable task with status indicator - [ ]
+    // Status -t (tree mode) shows actionable task with status indicator * [ ]
     let (success_tree, stdout_tree, _) = did_cmd(root, &["status", "-t"]);
     assert!(success_tree);
-    assert!(stdout_tree.contains("- [ ] a.md"));
-    assert!(stdout_tree.contains("- [ ] b.md"));
+    assert!(stdout_tree.contains("* [ ] a.md"));
+    assert!(stdout_tree.contains("* [ ] b.md"));
 
-    // Status -t -a (tree mode with all) shows closed task with - [x]
+    // Status -t -a (tree mode with all) shows closed task with * [x]
     let (success_tree_a, stdout_tree_a, _) = did_cmd(root, &["status", "-t", "-a"]);
     assert!(success_tree_a);
-    assert!(stdout_tree_a.contains("- [x] .c.md"));
+    assert!(stdout_tree_a.contains("* [x] .c.md"));
 }
 
 #[test]

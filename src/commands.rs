@@ -610,9 +610,9 @@ fn cmd_status(repo: &Repo, raw_path: Option<&Path>, tree: bool, only_blocked: bo
 
             if include_in_output {
                 let status_indicator = if is_hidden {
-                    "- [x]"
+                    "* [x]"
                 } else {
-                    "- [ ]"
+                    "* [ ]"
                 };
                 items.push((repo.relative_display_path(path), status_indicator, is_blocked));
             }
@@ -734,9 +734,9 @@ fn cmd_search(repo: &Repo, query: &str, raw_path: Option<&Path>, show_line_num: 
                 };
 
                 let status_indicator = if is_hidden {
-                    "- [x]"
+                    "* [x]"
                 } else {
-                    "- [ ]"
+                    "* [ ]"
                 };
 
                 if !content_matches.is_empty() {
@@ -822,7 +822,7 @@ fn print_tree_view(_root_path: &Path, items: &[(String, &'static str, bool)], _r
         }
     }
 
-    fn build_markdown_tree(map: &BTreeMap<String, MapNode>, depth: usize, prefix_path: String, out: &mut String) {
+    fn build_markdown_tree(map: &BTreeMap<String, MapNode>, depth: usize, out: &mut String) {
         let indent = "  ".repeat(depth);
         let mut files = Vec::new();
         let mut dirs = Vec::new();
@@ -845,30 +845,15 @@ fn print_tree_view(_root_path: &Path, items: &[(String, &'static str, bool)], _r
         }
 
         for (name, node) in dirs {
-            let current_path = if prefix_path.is_empty() {
-                name.clone()
-            } else {
-                format!("{}/{}", prefix_path, name)
-            };
-
-            let single_child_is_dir = node.children.len() == 1
-                && node.indicator.is_none()
-                && node.children.values().next().is_some_and(|child| child.indicator.is_none());
-
-            if single_child_is_dir {
-                // Collapse nested directory branch if its only child is also a directory
-                build_markdown_tree(&node.children, depth, current_path, out);
-            } else {
-                out.push_str(&format!("{}* **{}/**\n", indent, current_path));
-                if !node.children.is_empty() {
-                    build_markdown_tree(&node.children, depth + 1, String::new(), out);
-                }
+            out.push_str(&format!("{}* **{}/**\n", indent, name));
+            if !node.children.is_empty() {
+                build_markdown_tree(&node.children, depth + 1, out);
             }
         }
     }
 
     let mut tree_md = String::new();
-    build_markdown_tree(&root_map, 0, String::new(), &mut tree_md);
+    build_markdown_tree(&root_map, 0, &mut tree_md);
     crate::renderer::render_markdown(&tree_md);
 }
 
