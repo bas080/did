@@ -30,6 +30,7 @@ pub enum Commands {
     },
 
     /// List actionables (leaf nodes with all sub-items done)
+    #[command(alias = "list")]
     Status {
         /// Optional subtree path
         path: Option<PathBuf>,
@@ -64,7 +65,8 @@ pub enum Commands {
     },
 
     /// Mark PATH as resolved (hides it; fails if sub-items remain open)
-    Done {
+    #[command(alias = "done")]
+    Close {
         /// Task file path or directory
         path: PathBuf,
 
@@ -74,7 +76,8 @@ pub enum Commands {
     },
 
     /// Mark a resolved PATH as open/undone (removes leading dot; updates symlinks)
-    Undone {
+    #[command(alias = "undone")]
+    Open {
         /// Resolved task file path
         path: PathBuf,
     },
