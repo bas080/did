@@ -196,6 +196,7 @@ pub fn render_section_break() {
 }
 
 /// Renders a titled content block inside a border container.
+#[allow(dead_code)]
 pub fn draw_box(title: &str, content_md: &str, style: BoxStyle) {
     draw_box_to(&mut std::io::stdout(), title, content_md, style);
 }

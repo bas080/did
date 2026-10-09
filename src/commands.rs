@@ -815,9 +815,9 @@ fn print_tree_view(_root_path: &Path, items: &[(String, &'static str)], _repo: &
                 build_markdown_tree(&node.children, depth, current_path, out);
             } else {
                 if let Some(ind) = node.indicator {
-                    out.push_str(&format!("{}- {} {}\n", indent, ind, name));
+                    out.push_str(&format!("{}* {} {}\n", indent, ind, name));
                 } else {
-                    out.push_str(&format!("{}- **{}/**\n", indent, current_path));
+                    out.push_str(&format!("{}* **{}/**\n", indent, current_path));
                 }
                 if !node.children.is_empty() {
                     build_markdown_tree(&node.children, depth + 1, String::new(), out);
