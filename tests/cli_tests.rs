@@ -208,10 +208,10 @@ fn test_status_default_path_env() {
     assert!(stdout1.contains("subdir/task1.md"));
     assert!(!stdout1.contains("root_task.md"));
 
-    // Explicit path CLI argument takes precedence over DID_STATUS_PATH
+    // Explicit path CLI argument takes precedence over DID_STATUS_PATH (with -a to show blocked item)
     let (success2, stdout2, _) = did_cmd_env(
         root,
-        &["status", "root_task.md"],
+        &["status", "-a", "root_task.md"],
         &[("DID_STATUS_PATH", "subdir")],
     );
     assert!(success2);
@@ -250,29 +250,29 @@ fn test_link_and_done_updates_symlink() {
 
     fs::create_dir_all(root.join(".did")).unwrap();
 
-    did_cmd(root, &["add", "feature.md", "-m", "Feature requirement"]);
+    did_cmd(root, &["add", "specs/feature.md", "-m", "Feature requirement"]);
     did_cmd(
         root,
         &["add", "backend/server.md", "-m", "Server implementation"],
     );
 
-    // Link feature.md into backend/
-    let (success_link, _, _) = did_cmd(root, &["link", "feature.md", "backend"]);
+    // Link specs/feature.md into backend/
+    let (success_link, _, _) = did_cmd(root, &["link", "specs/feature.md", "backend"]);
     assert!(success_link);
 
     let symlink_file = root.join(".did/backend/feature.md");
     assert!(symlink_file.is_symlink());
 
-    // Complete feature.md
-    let (success_done_feat, _, _) = did_cmd(root, &["done", "feature.md"]);
+    // Complete specs/feature.md
+    let (success_done_feat, _, _) = did_cmd(root, &["done", "specs/feature.md"]);
     assert!(success_done_feat);
-    assert!(root.join(".did/.feature.md").is_file());
+    assert!(root.join(".did/specs/.feature.md").is_file());
 
     // Symlink inside backend should be updated to .feature.md!
     let updated_symlink = root.join(".did/backend/.feature.md");
     assert!(updated_symlink.is_symlink());
     let target = fs::read_link(&updated_symlink).unwrap();
-    assert_eq!(target, Path::new("../.feature.md"));
+    assert_eq!(target, Path::new("../specs/.feature.md"));
 
     // Now server.md is actionable!
     let (_, stdout_stat2, _) = did_cmd(root, &["status"]);
