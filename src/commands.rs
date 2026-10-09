@@ -227,6 +227,7 @@ fn cmd_add(repo: &Repo, raw_path: &Path, message: Option<String>) -> ExitCode {
             dest: None,
             old: None,
             new: None,
+            topic: None,
         },
     )
     .is_err()
@@ -322,6 +323,7 @@ fn cmd_rm(repo: &Repo, raw_path: &Path, recursive: bool) -> ExitCode {
             dest: None,
             old: None,
             new: None,
+            topic: None,
         },
     )
     .is_err()
@@ -393,6 +395,7 @@ fn cmd_link(repo: &Repo, target_raw: &Path, dest_raw: &Path) -> ExitCode {
             dest: Some(&dest_rel),
             old: None,
             new: None,
+            topic: None,
         },
     )
     .is_err()
@@ -451,6 +454,7 @@ fn cmd_mv(repo: &Repo, old_raw: &Path, new_raw: &Path) -> ExitCode {
             dest: None,
             old: Some(&old_rel),
             new: Some(&new_rel),
+            topic: None,
         },
     )
     .is_err()
@@ -560,6 +564,7 @@ fn cmd_status(repo: &Repo, raw_path: Option<&Path>, tree: bool, only_blocked: bo
             dest: None,
             old: None,
             new: None,
+            topic: None,
         },
     )
     .is_err()
@@ -665,6 +670,7 @@ fn cmd_search(repo: &Repo, query: &str, raw_path: Option<&Path>, show_line_num: 
             dest: None,
             old: None,
             new: None,
+            topic: None,
         },
     )
     .is_err()
@@ -909,6 +915,7 @@ struct HookEnv<'a> {
     dest: Option<&'a str>,
     old: Option<&'a str>,
     new: Option<&'a str>,
+    topic: Option<&'a str>,
 }
 
 fn run_ancestor_hooks(repo: &Repo, start_path: &Path, env_spec: HookEnv) -> Result<bool, ExitCode> {
@@ -951,6 +958,9 @@ fn run_ancestor_hooks(repo: &Repo, start_path: &Path, env_spec: HookEnv) -> Resu
                 }
                 if let Some(n) = env_spec.new {
                     cmd.env("DID_NEW", n);
+                }
+                if let Some(tp) = env_spec.topic {
+                    cmd.env("DID_TOPIC", tp);
                 }
                 cmd.env("DID_REPO_ROOT", root_dir);
                 cmd.env("DID_STATE_DIR", &repo.did_dir);
@@ -1076,17 +1086,19 @@ fn cmd_show(repo: &Repo, raw_path: &Path, _all: bool) -> ExitCode {
 
     let blocking = repo.get_unresolved_blocking_items(&target_path);
     if !blocking.is_empty() {
-        if crate::renderer::should_color() {
-            let mut block_md = String::from("### Blocked by unresolved sub-items:\n\n");
-            for item in &blocking {
-                block_md.push_str(&format!("* {}\n", item));
-            }
-            crate::renderer::draw_box("Warning: Task Blocked", &block_md, crate::renderer::BoxStyle::AdditionalInfo);
+        let mut block_md = String::new();
+        for item in &blocking {
+            block_md.push_str(&format!("* {}\n", item));
+        }
+        if crate::renderer::should_box() || crate::renderer::should_color() {
+            crate::renderer::draw_box("Blocked", &block_md, crate::renderer::BoxStyle::AdditionalInfo);
+            println!();
         } else {
-            eprintln!("[Blocked by unresolved sub-items:]");
+            eprintln!("[Blocked]");
             for item in blocking {
                 eprintln!("  - {}", item);
             }
+            eprintln!();
         }
     }
 
@@ -1100,6 +1112,7 @@ fn cmd_show(repo: &Repo, raw_path: &Path, _all: bool) -> ExitCode {
             dest: None,
             old: None,
             new: None,
+            topic: None,
         },
     ) {
         Ok(p) => p,
@@ -1119,7 +1132,7 @@ fn cmd_show(repo: &Repo, raw_path: &Path, _all: bool) -> ExitCode {
         }
         if crate::renderer::should_box() || crate::renderer::should_color() {
             println!();
-            crate::renderer::draw_box("Related Items", &related_md, crate::renderer::BoxStyle::AdditionalInfo);
+            crate::renderer::draw_box("Related", &related_md, crate::renderer::BoxStyle::AdditionalInfo);
         }
     }
 
@@ -1247,6 +1260,7 @@ fn cmd_done_single(repo: &Repo, target_path: &Path) -> ExitCode {
             dest: None,
             old: None,
             new: None,
+            topic: None,
         },
     )
     .is_err()
@@ -1364,6 +1378,7 @@ fn cmd_undone_single(repo: &Repo, target_path: &Path) -> ExitCode {
             dest: None,
             old: None,
             new: None,
+            topic: None,
         },
     )
     .is_err()
@@ -1404,6 +1419,7 @@ fn cmd_test(repo: &Repo) -> ExitCode {
             dest: None,
             old: None,
             new: None,
+            topic: None,
         },
     )
     .is_err()
@@ -1534,6 +1550,7 @@ pub fn cmd_help(repo_opt: Option<&Repo>, topic: Option<&str>) -> ExitCode {
                 dest: None,
                 old: None,
                 new: None,
+                topic,
             },
         ) {
             printed_hook = printed;
