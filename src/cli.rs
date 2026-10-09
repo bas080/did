@@ -119,6 +119,20 @@ pub enum Commands {
         recursive: bool,
     },
 
+    /// View task Git history and lifecycle events
+    Log {
+        /// Optional task path or directory to filter history
+        path: Option<PathBuf>,
+
+        /// Show events since specified date/time
+        #[arg(long)]
+        since: Option<String>,
+
+        /// Show events until specified date/time
+        #[arg(long)]
+        until: Option<String>,
+    },
+
     /// Validate repository health and structure
     Test,
 

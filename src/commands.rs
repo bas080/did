@@ -111,6 +111,13 @@ pub fn run(repo_opt: Option<Repo>, command: Commands, global_all: bool) -> ExitC
             };
             cmd_show(&repo, &path, global_all)
         }
+        Commands::Log { path, since, until } => {
+            let repo = match require_repo(repo_opt) {
+                Ok(r) => r,
+                Err(code) => return code,
+            };
+            cmd_log(&repo, path, since, until)
+        }
         Commands::Close { path, recursive } => {
             let repo = match require_repo(repo_opt) {
                 Ok(r) => r,
@@ -1645,7 +1652,13 @@ pub fn cmd_help(repo_opt: Option<&Repo>, topic: Option<&str>) -> ExitCode {
     match topic {
         None => {
             use clap::CommandFactory;
-            let _ = crate::cli::Cli::command().print_help();
+            let mut cmd = crate::cli::Cli::command();
+            if !is_git_installed() {
+                if let Some(sub) = cmd.find_subcommand_mut("log") {
+                    *sub = sub.clone().hide(true);
+                }
+            }
+            let _ = cmd.print_help();
             println!();
         }
         Some("hooks") => {
@@ -1664,6 +1677,9 @@ pub fn cmd_help(repo_opt: Option<&Repo>, topic: Option<&str>) -> ExitCode {
             if let Some(sub) = cmd.find_subcommand_mut(t_resolved) {
                 let _ = sub.print_help();
                 println!();
+                if t_resolved == "log" && !is_git_installed() {
+                    eprintln!("Note: 'git' executable was not found in PATH. 'did log' requires Git to be installed.");
+                }
             } else {
                 eprintln!("error: unrecognized help topic or subcommand '{}'", t);
                 return ExitCode::FAILURE;
@@ -1907,4 +1923,314 @@ fn compute_relative_path(from_dir: &Path, to_file: &Path) -> Option<PathBuf> {
     } else {
         Some(rel)
     }
+}
+
+pub fn is_git_installed() -> bool {
+    Command::new("git")
+        .arg("--version")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
+fn is_box_enabled() -> bool {
+    if env::var("DID_NO_BOX").map(|v| !v.is_empty()).unwrap_or(false)
+        || env::var("NO_BOX").map(|v| !v.is_empty()).unwrap_or(false)
+    {
+        return false;
+    }
+    if let Ok(val) = env::var("DID_BOX") {
+        if val == "0" || val.eq_ignore_ascii_case("false") || val.eq_ignore_ascii_case("no") {
+            return false;
+        }
+    }
+    true
+}
+
+fn print_boxed_stderr(message: &str) {
+    if is_box_enabled() {
+        let len = message.chars().count();
+        let border = "─".repeat(len + 2);
+        eprintln!("┌{}┐", border);
+        eprintln!("│ {} │", message);
+        eprintln!("└{}┘", border);
+    } else {
+        eprintln!("---");
+        eprintln!("{}", message);
+        eprintln!("---");
+    }
+}
+
+pub fn cmd_log(
+    repo: &Repo,
+    raw_path: Option<PathBuf>,
+    since: Option<String>,
+    until: Option<String>,
+) -> ExitCode {
+    if !is_git_installed() {
+        eprintln!("error: git is required for 'did log' but was not found in PATH.");
+        return ExitCode::FAILURE;
+    }
+
+    let repo_root = match repo.did_dir.parent() {
+        Some(p) => p,
+        None => &repo.did_dir,
+    };
+
+    let target_path = match raw_path {
+        Some(ref p) => repo.resolve_path(p),
+        None => repo.did_dir.clone(),
+    };
+
+    let rel_git_path = match compute_relative_path(repo_root, &target_path) {
+        Some(p) => p,
+        None => target_path.clone(),
+    };
+
+    let mut git_cmd = Command::new("git");
+    git_cmd
+        .arg("log")
+        .arg("-M")
+        .arg("--name-status")
+        .arg("--pretty=format:COMMIT:%h|%an|%ad")
+        .arg("--date=short");
+
+    if raw_path.is_some() {
+        git_cmd.arg("--follow");
+    }
+
+    if let Some(ref s) = since {
+        git_cmd.arg(format!("--since={}", s));
+    }
+    if let Some(ref u) = until {
+        git_cmd.arg(format!("--until={}", u));
+    }
+
+    git_cmd.arg("--");
+    git_cmd.arg(&rel_git_path);
+    git_cmd.current_dir(repo_root);
+
+    let output = match git_cmd.output() {
+        Ok(out) => out,
+        Err(e) => {
+            eprintln!("error executing git log: {}", e);
+            return ExitCode::FAILURE;
+        }
+    };
+
+    if !output.status.success() {
+        let err_msg = String::from_utf8_lossy(&output.stderr);
+        eprintln!("error running git log: {}", err_msg.trim());
+        return ExitCode::FAILURE;
+    }
+
+    let stdout_str = String::from_utf8_lossy(&output.stdout);
+    let events = parse_git_log_output(&stdout_str, repo);
+
+    if events.is_empty() {
+        print_boxed_stderr("did log: 0 events");
+        return ExitCode::SUCCESS;
+    }
+
+    let latest_date = events.first().map(|e| e.date.as_str()).unwrap_or("");
+    let earliest_date = events.last().map(|e| e.date.as_str()).unwrap_or("");
+
+    let summary_msg = if earliest_date == latest_date || earliest_date.is_empty() {
+        format!("did log: {} event(s)", events.len())
+    } else {
+        format!(
+            "did log: {} event(s) ({} to {})",
+            events.len(),
+            earliest_date,
+            latest_date
+        )
+    };
+
+    print_boxed_stderr(&summary_msg);
+
+    for ev in &events {
+        println!("{}", ev.to_markdown());
+    }
+
+    ExitCode::SUCCESS
+}
+
+struct LogCommit {
+    hash: String,
+    author: String,
+    date: String,
+}
+
+enum LogAction {
+    Created(String),
+    Moved { old: String, new: String },
+    Closed { old: String, new: String },
+    Reopened { old: String, new: String },
+    Deleted(String),
+    Modified(String),
+}
+
+struct LogEvent {
+    hash: String,
+    author: String,
+    date: String,
+    action: LogAction,
+}
+
+impl LogEvent {
+    fn to_markdown(&self) -> String {
+        match &self.action {
+            LogAction::Created(p) => format!(
+                "- **{}** Task created: `{}` by *{}* on `{}`",
+                self.hash, p, self.author, self.date
+            ),
+            LogAction::Moved { old, new } => format!(
+                "- **{}** Task moved: `{}` -> `{}` by *{}* on `{}`",
+                self.hash, old, new, self.author, self.date
+            ),
+            LogAction::Closed { old, new } => format!(
+                "- **{}** Task closed: `{}` -> `{}` by *{}* on `{}`",
+                self.hash, old, new, self.author, self.date
+            ),
+            LogAction::Reopened { old, new } => format!(
+                "- **{}** Task reopened: `{}` -> `{}` by *{}* on `{}`",
+                self.hash, old, new, self.author, self.date
+            ),
+            LogAction::Deleted(p) => format!(
+                "- **{}** Task deleted: `{}` by *{}* on `{}`",
+                self.hash, p, self.author, self.date
+            ),
+            LogAction::Modified(p) => format!(
+                "- **{}** Task modified: `{}` by *{}* on `{}`",
+                self.hash, p, self.author, self.date
+            ),
+        }
+    }
+}
+
+fn clean_task_path(git_path: &str) -> String {
+    let p = Path::new(git_path);
+    let mut components = p.components();
+    if let Some(first) = components.next() {
+        if first.as_os_str() == ".did" {
+            let rest: PathBuf = components.collect();
+            return rest.to_string_lossy().to_string();
+        }
+    }
+    git_path.to_string()
+}
+
+fn is_ignorable_path(git_path: &str) -> bool {
+    let cleaned = clean_task_path(git_path);
+    if cleaned.starts_with(".hooks")
+        || cleaned.contains("/.hooks/")
+        || cleaned.starts_with("target")
+        || cleaned.contains("/target/")
+        || cleaned.starts_with(".git")
+    {
+        return true;
+    }
+    false
+}
+
+fn parse_git_log_output(output: &str, _repo: &Repo) -> Vec<LogEvent> {
+    let mut events = Vec::new();
+    let mut current_commit: Option<LogCommit> = None;
+
+    for line in output.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+
+        if let Some(rest) = trimmed.strip_prefix("COMMIT:") {
+            let parts: Vec<&str> = rest.split('|').collect();
+            if parts.len() >= 3 {
+                current_commit = Some(LogCommit {
+                    hash: parts[0].to_string(),
+                    author: parts[1].to_string(),
+                    date: parts[2].to_string(),
+                });
+            }
+        } else if let Some(commit) = &current_commit {
+            let parts: Vec<&str> = trimmed.split('\t').collect();
+            if parts.is_empty() {
+                continue;
+            }
+
+            let status = parts[0];
+
+            if status.starts_with('R') || status.starts_with('C') {
+                if parts.len() >= 3 {
+                    let old_raw = parts[1];
+                    let new_raw = parts[2];
+
+                    if is_ignorable_path(old_raw) && is_ignorable_path(new_raw) {
+                        continue;
+                    }
+
+                    let old_clean = clean_task_path(old_raw);
+                    let new_clean = clean_task_path(new_raw);
+
+                    let old_filename = Path::new(&old_clean)
+                        .file_name()
+                        .map(|s| s.to_string_lossy())
+                        .unwrap_or_default();
+                    let new_filename = Path::new(&new_clean)
+                        .file_name()
+                        .map(|s| s.to_string_lossy())
+                        .unwrap_or_default();
+
+                    let action = if !old_filename.starts_with('.') && new_filename.starts_with('.') {
+                        LogAction::Closed {
+                            old: old_clean,
+                            new: new_clean,
+                        }
+                    } else if old_filename.starts_with('.') && !new_filename.starts_with('.') {
+                        LogAction::Reopened {
+                            old: old_clean,
+                            new: new_clean,
+                        }
+                    } else {
+                        LogAction::Moved {
+                            old: old_clean,
+                            new: new_clean,
+                        }
+                    };
+
+                    events.push(LogEvent {
+                        hash: commit.hash.clone(),
+                        author: commit.author.clone(),
+                        date: commit.date.clone(),
+                        action,
+                    });
+                }
+            } else if parts.len() >= 2 {
+                let file_raw = parts[1];
+                if is_ignorable_path(file_raw) {
+                    continue;
+                }
+
+                let clean = clean_task_path(file_raw);
+                let action = if status.starts_with('A') {
+                    LogAction::Created(clean)
+                } else if status.starts_with('D') {
+                    LogAction::Deleted(clean)
+                } else {
+                    LogAction::Modified(clean)
+                };
+
+                events.push(LogEvent {
+                    hash: commit.hash.clone(),
+                    author: commit.author.clone(),
+                    date: commit.date.clone(),
+                    action,
+                });
+            }
+        }
+    }
+
+    events
 }

@@ -3,7 +3,7 @@ mod commands;
 mod renderer;
 mod repo;
 
-use clap::Parser;
+use clap::{CommandFactory, FromArgMatches};
 use cli::Cli;
 use repo::Repo;
 use std::env;
@@ -14,7 +14,33 @@ use std::process::ExitCode;
 
 fn main() -> ExitCode {
     let args: Vec<String> = env::args().collect();
-    let cli = Cli::parse();
+    let mut cmd = Cli::command();
+
+    if !commands::is_git_installed() {
+        if let Some(sub) = cmd.find_subcommand_mut("log") {
+            *sub = sub.clone().hide(true);
+        }
+    }
+
+    let matches = match cmd.try_get_matches_from(&args) {
+        Ok(m) => m,
+        Err(e) => {
+            let _ = e.print();
+            return if e.use_stderr() {
+                ExitCode::FAILURE
+            } else {
+                ExitCode::SUCCESS
+            };
+        }
+    };
+
+    let cli = match Cli::from_arg_matches(&matches) {
+        Ok(c) => c,
+        Err(e) => {
+            let _ = e.print();
+            return ExitCode::FAILURE;
+        }
+    };
 
     let current_dir = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
     let repo_opt = Repo::find(&current_dir);
