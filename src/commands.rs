@@ -824,26 +824,42 @@ fn print_tree_view(_root_path: &Path, items: &[(String, &'static str, bool)], _r
 
     fn build_markdown_tree(map: &BTreeMap<String, MapNode>, depth: usize, prefix_path: String, out: &mut String) {
         let indent = "  ".repeat(depth);
+        let mut files = Vec::new();
+        let mut dirs = Vec::new();
+
         for (name, node) in map {
+            if node.indicator.is_some() && node.children.is_empty() {
+                files.push((name, node));
+            } else {
+                dirs.push((name, node));
+            }
+        }
+
+        for (name, node) in files {
+            let ind = node.indicator.unwrap();
+            if node.is_blocked {
+                out.push_str(&format!("{}{} *{}* *(blocked)*\n", indent, ind, name));
+            } else {
+                out.push_str(&format!("{}{} {}\n", indent, ind, name));
+            }
+        }
+
+        for (name, node) in dirs {
             let current_path = if prefix_path.is_empty() {
                 name.clone()
             } else {
                 format!("{}/{}", prefix_path, name)
             };
 
-            if node.children.len() == 1 && node.indicator.is_none() {
-                // Collapse directory branch if it has only one child
+            let single_child_is_dir = node.children.len() == 1
+                && node.indicator.is_none()
+                && node.children.values().next().is_some_and(|child| child.indicator.is_none());
+
+            if single_child_is_dir {
+                // Collapse nested directory branch if its only child is also a directory
                 build_markdown_tree(&node.children, depth, current_path, out);
             } else {
-                if let Some(ind) = node.indicator {
-                    if node.is_blocked {
-                        out.push_str(&format!("{}{} *{}* *(blocked)*\n", indent, ind, name));
-                    } else {
-                        out.push_str(&format!("{}{} {}\n", indent, ind, name));
-                    }
-                } else {
-                    out.push_str(&format!("{}* **{}/**\n", indent, current_path));
-                }
+                out.push_str(&format!("{}* **{}/**\n", indent, current_path));
                 if !node.children.is_empty() {
                     build_markdown_tree(&node.children, depth + 1, String::new(), out);
                 }
