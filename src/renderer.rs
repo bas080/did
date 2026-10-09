@@ -247,10 +247,12 @@ pub fn draw_box(title: &str, content_md: &str, style: BoxStyle) {
 
     // Top border
     let mut top_line = String::new();
-    top_line.push_str("╭─ ");
     if !title.is_empty() {
+        top_line.push_str("╭─ ");
         top_line.push_str(title);
         top_line.push(' ');
+    } else {
+        top_line.push_str("╭─");
     }
     let current_top_len = unicode_width::UnicodeWidthStr::width(top_line.as_str());
     if current_top_len < term_width.saturating_sub(1) {
