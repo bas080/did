@@ -80,6 +80,104 @@ impl Repo {
             full_path.to_string_lossy().to_string()
         }
     }
+
+    /// Returns a list of unresolved blocking items (relative paths and symlink targets) under child subdirectories of `task_file`.
+    pub fn get_unresolved_blocking_items(&self, task_file: &Path) -> Vec<String> {
+        let parent_dir = match task_file.parent() {
+            Some(p) => p,
+            None => return Vec::new(),
+        };
+
+        let is_top_category = parent_dir.parent() == Some(&self.did_dir) || parent_dir == self.did_dir;
+        let task_stem = task_file.file_stem().unwrap_or_default().to_string_lossy();
+        let mut items = Vec::new();
+
+        if task_stem == "index" {
+            self.collect_unresolved_in_dir(parent_dir, &mut items);
+            let self_rel = self.relative_display_path(task_file);
+            items.retain(|item| item != &self_rel);
+        } else if let Ok(entries) = fs::read_dir(parent_dir) {
+            for entry in entries.flatten() {
+                let p = entry.path();
+                if p == task_file {
+                    continue;
+                }
+                let is_symlink = p.is_symlink();
+                if p.is_dir() && !is_symlink {
+                    let dir_name = p.file_name().unwrap_or_default().to_string_lossy();
+                    if dir_name.starts_with('.') {
+                        continue;
+                    }
+                    if is_top_category {
+                        if dir_name == task_stem {
+                            self.collect_unresolved_in_dir(&p, &mut items);
+                        }
+                    } else {
+                        self.collect_unresolved_in_dir(&p, &mut items);
+                    }
+                }
+            }
+        }
+
+        items.sort();
+        items.dedup();
+
+        if !items.is_empty() && std::env::var("DID_DEBUG").map(|v| !v.is_empty()).unwrap_or(false) {
+            eprintln!(
+                "[DEBUG] Blocking check for '{}': {} unresolved child sub-items found",
+                self.relative_display_path(task_file),
+                items.len()
+            );
+        }
+
+        items
+    }
+
+    fn collect_unresolved_in_dir(&self, dir: &Path, items: &mut Vec<String>) {
+        let dir_name = dir.file_name().unwrap_or_default().to_string_lossy();
+        if dir_name.starts_with('.') {
+            return;
+        }
+        for entry in walkdir::WalkDir::new(dir).into_iter().filter_map(|e| e.ok()) {
+            let p = entry.path();
+            if is_reserved_hook_file(p) {
+                continue;
+            }
+            let name = p.file_name().unwrap_or_default().to_string_lossy();
+            if name.starts_with('.') {
+                continue;
+            }
+            if p.is_symlink() {
+                let target_str = fs::read_link(p)
+                    .map(|t| t.to_string_lossy().to_string())
+                    .unwrap_or_default();
+                items.push(format!("{} -> {}", self.relative_display_path(p), target_str));
+            } else if p.is_file() {
+                items.push(self.relative_display_path(p));
+            }
+        }
+    }
+
+    /// Checks if a task file has any unresolved sub-items (deeper subdirectories).
+    pub fn has_unresolved_subitems(&self, task_file: &Path) -> bool {
+        !self.get_unresolved_blocking_items(task_file).is_empty()
+    }
+}
+
+fn is_reserved_hook_file(path: &Path) -> bool {
+    let stem = path.file_stem().unwrap_or_default().to_string_lossy();
+    if matches!(
+        stem.as_ref(),
+        "show" | "status" | "done" | "close" | "undone" | "open" | "add" | "link" | "blocks" | "mv" | "move" | "test" | "query" | "remove" | "help"
+    ) {
+        if let Some(parent) = path.parent() {
+            let parent_name = parent.file_name().unwrap_or_default().to_string_lossy();
+            if parent_name == ".hooks" || parent_name == "hooks" {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 #[cfg(test)]
