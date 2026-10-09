@@ -1616,14 +1616,14 @@ fn test_did_log_subcommand() {
     let (s_log, stdout_log, stderr_log) = did_cmd(root, &["log"]);
     assert!(s_log);
     assert!(stderr_log.contains("did log: 3 event(s)"));
-    assert!(stdout_log.contains("Task created: `refine/auth.md` by *Test User*"));
-    assert!(stdout_log.contains("Task moved: `refine/auth.md` -> `implement/auth.md` by *Test User*"));
-    assert!(stdout_log.contains("Task closed: `implement/auth.md` -> `implement/.auth.md` by *Test User*"));
+    assert!(stdout_log.contains("Task *created*: `refine/auth.md` by *Test User*"));
+    assert!(stdout_log.contains("Task *moved*: `refine/auth.md` -> `implement/auth.md` by *Test User*"));
+    assert!(stdout_log.contains("Task *closed*: `implement/auth.md` -> `implement/.auth.md` by *Test User*"));
 
     let (s_path, stdout_path, stderr_path) = did_cmd(root, &["log", "implement/.auth.md"]);
     assert!(s_path);
     assert!(stderr_path.contains("did log: 3 event(s)"));
-    assert!(stdout_path.contains("Task closed:"));
+    assert!(stdout_path.contains("Task *closed*:"));
 
     let (s_nobox, _, stderr_nobox) = did_cmd_env(root, &["log"], &[("NO_BOX", "1")]);
     assert!(s_nobox);

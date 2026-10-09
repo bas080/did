@@ -2083,27 +2083,27 @@ impl LogEvent {
     fn to_markdown(&self) -> String {
         match &self.action {
             LogAction::Created(p) => format!(
-                "- **{}** Task created: `{}` by *{}* on `{}`",
+                "- **{}** Task *created*: `{}` by *{}* on `{}`",
                 self.hash, p, self.author, self.date
             ),
             LogAction::Moved { old, new } => format!(
-                "- **{}** Task moved: `{}` -> `{}` by *{}* on `{}`",
+                "- **{}** Task *moved*: `{}` -> `{}` by *{}* on `{}`",
                 self.hash, old, new, self.author, self.date
             ),
             LogAction::Closed { old, new } => format!(
-                "- **{}** Task closed: `{}` -> `{}` by *{}* on `{}`",
+                "- **{}** Task *closed*: `{}` -> `{}` by *{}* on `{}`",
                 self.hash, old, new, self.author, self.date
             ),
             LogAction::Reopened { old, new } => format!(
-                "- **{}** Task reopened: `{}` -> `{}` by *{}* on `{}`",
+                "- **{}** Task *reopened*: `{}` -> `{}` by *{}* on `{}`",
                 self.hash, old, new, self.author, self.date
             ),
             LogAction::Deleted(p) => format!(
-                "- **{}** Task deleted: `{}` by *{}* on `{}`",
+                "- **{}** Task *deleted*: `{}` by *{}* on `{}`",
                 self.hash, p, self.author, self.date
             ),
             LogAction::Modified(p) => format!(
-                "- **{}** Task modified: `{}` by *{}* on `{}`",
+                "- **{}** Task *modified*: `{}` by *{}* on `{}`",
                 self.hash, p, self.author, self.date
             ),
         }
