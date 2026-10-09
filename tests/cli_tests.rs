@@ -1586,32 +1586,32 @@ fn test_did_log_subcommand() {
     let root = dir.path();
 
     let status_git = Command::new("git")
-        .args(&["init"])
+        .args(["init"])
         .current_dir(root)
         .status()
         .expect("git init failed");
     assert!(status_git.success());
 
-    Command::new("git").args(&["config", "user.name", "Test User"]).current_dir(root).status().unwrap();
-    Command::new("git").args(&["config", "user.email", "test@example.com"]).current_dir(root).status().unwrap();
+    Command::new("git").args(["config", "user.name", "Test User"]).current_dir(root).status().unwrap();
+    Command::new("git").args(["config", "user.email", "test@example.com"]).current_dir(root).status().unwrap();
 
     let (s_add1, _, _) = did_cmd(root, &["add", "refine/auth.md", "-m", "Auth task"]);
     assert!(s_add1);
 
-    Command::new("git").args(&["add", "."]).current_dir(root).status().unwrap();
-    Command::new("git").args(&["commit", "-m", "Add auth task"]).current_dir(root).status().unwrap();
+    Command::new("git").args(["add", "."]).current_dir(root).status().unwrap();
+    Command::new("git").args(["commit", "-m", "Add auth task"]).current_dir(root).status().unwrap();
 
     let (s_mv, _, _) = did_cmd(root, &["mv", "refine/auth.md", "implement/auth.md"]);
     assert!(s_mv);
 
-    Command::new("git").args(&["add", "."]).current_dir(root).status().unwrap();
-    Command::new("git").args(&["commit", "-m", "Move auth task"]).current_dir(root).status().unwrap();
+    Command::new("git").args(["add", "."]).current_dir(root).status().unwrap();
+    Command::new("git").args(["commit", "-m", "Move auth task"]).current_dir(root).status().unwrap();
 
     let (s_done, _, _) = did_cmd(root, &["done", "implement/auth.md"]);
     assert!(s_done);
 
-    Command::new("git").args(&["add", "."]).current_dir(root).status().unwrap();
-    Command::new("git").args(&["commit", "-m", "Close auth task"]).current_dir(root).status().unwrap();
+    Command::new("git").args(["add", "."]).current_dir(root).status().unwrap();
+    Command::new("git").args(["commit", "-m", "Close auth task"]).current_dir(root).status().unwrap();
 
     let (s_log, stdout_log, stderr_log) = did_cmd(root, &["log"]);
     assert!(s_log);
