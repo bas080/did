@@ -610,13 +610,11 @@ fn cmd_status(repo: &Repo, raw_path: Option<&Path>, tree: bool, only_blocked: bo
 
             if include_in_output {
                 let status_indicator = if is_hidden {
-                    "☑"
-                } else if is_blocked {
-                    "☒"
+                    "- [x]"
                 } else {
-                    "☐"
+                    "- [ ]"
                 };
-                items.push((repo.relative_display_path(path), status_indicator));
+                items.push((repo.relative_display_path(path), status_indicator, is_blocked));
             }
         }
     }
@@ -637,7 +635,7 @@ fn cmd_status(repo: &Repo, raw_path: Option<&Path>, tree: bool, only_blocked: bo
             print_tree_view(&root_path, &items, repo);
         }
     } else {
-        let results: Vec<String> = items.into_iter().map(|(p, _)| p).collect();
+        let results: Vec<String> = items.into_iter().map(|(p, _, _)| p).collect();
         print_results_with_limit(results, empty_msg);
     }
 
@@ -736,15 +734,13 @@ fn cmd_search(repo: &Repo, query: &str, raw_path: Option<&Path>, show_line_num: 
                 };
 
                 let status_indicator = if is_hidden {
-                    "☑"
-                } else if is_blocked {
-                    "☒"
+                    "- [x]"
                 } else {
-                    "☐"
+                    "- [ ]"
                 };
 
                 if !content_matches.is_empty() {
-                    tree_items.push((rel_display.clone(), status_indicator));
+                    tree_items.push((rel_display.clone(), status_indicator, is_blocked));
                     for (line_num, snippet) in content_matches {
                         if show_line_num {
                             results.push(format!("{}:{}: {}", rel_display, line_num, snippet));
@@ -753,7 +749,7 @@ fn cmd_search(repo: &Repo, query: &str, raw_path: Option<&Path>, show_line_num: 
                         }
                     }
                 } else if matches_path {
-                    tree_items.push((rel_display.clone(), status_indicator));
+                    tree_items.push((rel_display.clone(), status_indicator, is_blocked));
                     results.push(rel_display);
                 }
             }
@@ -795,17 +791,18 @@ fn get_status_limit() -> Option<usize> {
 }
 
 
-fn print_tree_view(_root_path: &Path, items: &[(String, &'static str)], _repo: &Repo) {
+fn print_tree_view(_root_path: &Path, items: &[(String, &'static str, bool)], _repo: &Repo) {
     use std::collections::BTreeMap;
 
     struct MapNode {
         indicator: Option<&'static str>,
+        is_blocked: bool,
         children: BTreeMap<String, MapNode>,
     }
 
     let mut root_map: BTreeMap<String, MapNode> = BTreeMap::new();
 
-    for (rel_path, indicator) in items {
+    for (rel_path, indicator, is_blocked) in items {
         let path = Path::new(rel_path);
         let components: Vec<_> = path.components().map(|c| c.as_os_str().to_string_lossy().to_string()).collect();
         let mut curr = &mut root_map;
@@ -814,10 +811,12 @@ fn print_tree_view(_root_path: &Path, items: &[(String, &'static str)], _repo: &
             let is_leaf = i == components.len() - 1;
             let entry = curr.entry(comp.clone()).or_insert_with(|| MapNode {
                 indicator: None,
+                is_blocked: false,
                 children: BTreeMap::new(),
             });
             if is_leaf {
                 entry.indicator = Some(indicator);
+                entry.is_blocked = *is_blocked;
             }
             curr = &mut entry.children;
         }
@@ -837,7 +836,11 @@ fn print_tree_view(_root_path: &Path, items: &[(String, &'static str)], _repo: &
                 build_markdown_tree(&node.children, depth, current_path, out);
             } else {
                 if let Some(ind) = node.indicator {
-                    out.push_str(&format!("{}* {} {}\n", indent, ind, name));
+                    if node.is_blocked {
+                        out.push_str(&format!("{}{} <span style=\"color: #777777;\">{}</span>\n", indent, ind, name));
+                    } else {
+                        out.push_str(&format!("{}{} {}\n", indent, ind, name));
+                    }
                 } else {
                     out.push_str(&format!("{}* **{}/**\n", indent, current_path));
                 }
@@ -1004,9 +1007,9 @@ fn run_ancestor_hooks(repo: &Repo, start_path: &Path, env_spec: HookEnv) -> Resu
                         let stdout_str = String::from_utf8_lossy(&out.stdout);
                         if !stdout_str.is_empty() {
                             if printed_any {
-                                println!();
+                                eprintln!();
                             }
-                            crate::renderer::draw_box("", &stdout_str, crate::renderer::BoxStyle::Hook);
+                            crate::renderer::draw_box_to(&mut std::io::stderr(), "", &stdout_str, crate::renderer::BoxStyle::Hook);
                             printed_any = true;
                         }
                         let stderr_str = String::from_utf8_lossy(&out.stderr);
@@ -1028,10 +1031,10 @@ fn run_ancestor_hooks(repo: &Repo, start_path: &Path, env_spec: HookEnv) -> Resu
                 }
             } else {
                 if printed_any {
-                    println!();
+                    eprintln!();
                 }
                 if let Ok(content) = fs::read_to_string(&hook_p) {
-                    crate::renderer::draw_box("", &content, crate::renderer::BoxStyle::Hook);
+                    crate::renderer::draw_box_to(&mut std::io::stderr(), "", &content, crate::renderer::BoxStyle::Hook);
                 }
                 printed_any = true;
             }
@@ -1124,8 +1127,8 @@ fn cmd_show(repo: &Repo, raw_path: &Path, _all: bool) -> ExitCode {
             block_md.push_str(&format!("* {}\n", item));
         }
         if crate::renderer::should_box() || crate::renderer::should_color() {
-            crate::renderer::draw_box("Blocked", &block_md, crate::renderer::BoxStyle::AdditionalInfo);
-            println!();
+            crate::renderer::draw_box_to(&mut std::io::stderr(), "Blocked", &block_md, crate::renderer::BoxStyle::AdditionalInfo);
+            eprintln!();
         } else {
             eprintln!("[Blocked]");
             for item in blocking {
@@ -1164,8 +1167,8 @@ fn cmd_show(repo: &Repo, raw_path: &Path, _all: bool) -> ExitCode {
             related_md.push_str(&format!("* {}\n", item));
         }
         if crate::renderer::should_box() || crate::renderer::should_color() {
-            println!();
-            crate::renderer::draw_box("Related", &related_md, crate::renderer::BoxStyle::AdditionalInfo);
+            eprintln!();
+            crate::renderer::draw_box_to(&mut std::io::stderr(), "Related", &related_md, crate::renderer::BoxStyle::AdditionalInfo);
         }
     }
 

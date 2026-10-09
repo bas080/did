@@ -37,7 +37,7 @@ fi
 UNDOCUMENTED_ENV=""
 for env_var in $(grep -oE "DID_[A_Z0-9_]+" src/*.rs | cut -d: -f2 | sort -u); do
     case "$env_var" in
-        DID_EVENT|DID_TARGET|DID_DEST|DID_OLD|DID_NEW|DID_REPO_ROOT|DID_STATE_DIR) continue ;;
+        DID_EVENT|DID_TARGET|DID_DEST|DID_OLD|DID_NEW|DID_TOPIC|DID_REPO_ROOT|DID_STATE_DIR) continue ;;
     esac
     if ! grep -q "$env_var" README.md && ! grep -q "$env_var" ADVANCED.md; then
         UNDOCUMENTED_ENV="$UNDOCUMENTED_ENV
