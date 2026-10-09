@@ -20,7 +20,32 @@ fn symlink<P: AsRef<Path>, Q: AsRef<Path>>(original: P, link: Q) -> std::io::Res
     }
 }
 
+fn check_subcommand_alias_warning() {
+    let args: Vec<String> = env::args().collect();
+    if args.len() > 1 {
+        let invoked = &args[1];
+        let (alias, canonical) = match invoked.as_str() {
+            "list" => ("list", "status"),
+            "search" => ("search", "query"),
+            "link" => ("link", "blocks"),
+            "ln" => ("ln", "blocks"),
+            "move" => ("move", "mv"),
+            "remove" => ("remove", "rm"),
+            "done" => ("done", "close"),
+            "undone" => ("undone", "open"),
+            _ => ("", ""),
+        };
+        if !alias.is_empty() {
+            eprintln!(
+                "warning: subcommand alias '{}' is deprecated. Please use '{}' instead.",
+                alias, canonical
+            );
+        }
+    }
+}
+
 pub fn run(repo_opt: Option<Repo>, command: Commands, global_all: bool) -> ExitCode {
+    check_subcommand_alias_warning();
     match command {
         Commands::Add { path, message } => {
             let repo = match repo_opt {
@@ -86,14 +111,14 @@ pub fn run(repo_opt: Option<Repo>, command: Commands, global_all: bool) -> ExitC
             };
             cmd_show(&repo, &path, global_all)
         }
-        Commands::Done { path, recursive } => {
+        Commands::Close { path, recursive } => {
             let repo = match require_repo(repo_opt) {
                 Ok(r) => r,
                 Err(code) => return code,
             };
             cmd_done(&repo, &path, recursive)
         }
-        Commands::Undone { path } => {
+        Commands::Open { path } => {
             let repo = match require_repo(repo_opt) {
                 Ok(r) => r,
                 Err(code) => return code,
@@ -604,9 +629,7 @@ fn cmd_status(repo: &Repo, raw_path: Option<&Path>, tree: bool, only_blocked: bo
         if items.is_empty() {
             eprintln!("{}", empty_msg);
         } else {
-            for (rel_path, indicator) in items {
-                println!("{} {}", indicator, rel_path);
-            }
+            print_tree_view(&root_path, &items, repo);
         }
     } else {
         let results: Vec<String> = items.into_iter().map(|(p, _)| p).collect();
@@ -738,6 +761,60 @@ fn get_status_limit() -> Option<usize> {
     None
 }
 
+
+fn print_tree_view(root_path: &Path, items: &[(String, &'static str)], repo: &Repo) {
+    use std::collections::BTreeMap;
+
+    struct MapNode {
+        indicator: Option<&'static str>,
+        children: BTreeMap<String, MapNode>,
+    }
+
+    let mut root_map: BTreeMap<String, MapNode> = BTreeMap::new();
+
+    for (rel_path, indicator) in items {
+        let path = Path::new(rel_path);
+        let components: Vec<_> = path.components().map(|c| c.as_os_str().to_string_lossy().to_string()).collect();
+        let mut curr = &mut root_map;
+
+        for (i, comp) in components.iter().enumerate() {
+            let is_leaf = i == components.len() - 1;
+            let entry = curr.entry(comp.clone()).or_insert_with(|| MapNode {
+                indicator: None,
+                children: BTreeMap::new(),
+            });
+            if is_leaf {
+                entry.indicator = Some(indicator);
+            }
+            curr = &mut entry.children;
+        }
+    }
+
+    fn print_map_node(map: &BTreeMap<String, MapNode>, prefix: &str) {
+        let count = map.len();
+        for (i, (name, node)) in map.iter().enumerate() {
+            let is_last = i == count - 1;
+            let branch = if is_last { "└── " } else { "├── " };
+            let child_prefix = if is_last { "    " } else { "│   " };
+
+            let label = if let Some(ind) = node.indicator {
+                format!("{} {}", ind, name)
+            } else {
+                name.clone()
+            };
+
+            println!("{}{}{}", prefix, branch, label);
+            if !node.children.is_empty() {
+                print_map_node(&node.children, &format!("{}{}", prefix, child_prefix));
+            }
+        }
+    }
+
+    let root_label = repo.relative_display_path(root_path);
+    println!("{}", root_label);
+    print_map_node(&root_map, "");
+}
+
 fn print_results_with_limit(results: Vec<String>, empty_msg: &str) {
     if results.is_empty() {
         if !empty_msg.is_empty() {
@@ -815,7 +892,7 @@ fn is_reserved_hook_file(path: &Path) -> bool {
     let stem = path.file_stem().unwrap_or_default().to_string_lossy();
     if matches!(
         stem.as_ref(),
-        "show" | "status" | "done" | "add" | "link" | "mv" | "move" | "test" | "query" | "remove" | "help"
+        "show" | "status" | "done" | "close" | "undone" | "open" | "add" | "link" | "blocks" | "mv" | "move" | "test" | "query" | "remove" | "help"
     ) {
         if let Some(parent) = path.parent() {
             let parent_name = parent.file_name().unwrap_or_default().to_string_lossy();
@@ -927,26 +1004,46 @@ fn run_ancestor_hooks(repo: &Repo, start_path: &Path, env_spec: HookEnv) -> Resu
 fn find_hook_files(ancestor_dir: &Path, event: &str) -> Vec<PathBuf> {
     let mut matches = Vec::new();
 
+    let fallback_event = match event {
+        "close" => Some("done"),
+        "open" => Some("undone"),
+        "blocks" => Some("link"),
+        _ => None,
+    };
+
     for sub in &[".hooks", "hooks"] {
         let hook_dir = ancestor_dir.join(sub);
         if hook_dir.is_dir() {
             if let Ok(entries) = fs::read_dir(&hook_dir) {
+                let mut primary_matches = Vec::new();
+                let mut legacy_matches = Vec::new();
+
                 for entry in entries.flatten() {
                     let path = entry.path();
                     if path.is_file() {
                         if let Some(stem) = path.file_stem() {
-                            if stem.to_string_lossy() == event {
-                                if std::env::var("DID_DEBUG").map(|v| !v.is_empty()).unwrap_or(false) {
-                                    eprintln!(
-                                        "[DEBUG] Hook check in '{}': found '{}'",
-                                        ancestor_dir.display(),
-                                        path.display()
-                                    );
+                            let stem_str = stem.to_string_lossy();
+                            if stem_str == event {
+                                primary_matches.push(path.clone());
+                            } else if let Some(fallback) = fallback_event {
+                                if stem_str == fallback {
+                                    legacy_matches.push(path.clone());
                                 }
-                                matches.push(path);
                             }
                         }
                     }
+                }
+
+                if !primary_matches.is_empty() {
+                    matches.extend(primary_matches);
+                } else if !legacy_matches.is_empty() {
+                    if let Some(fallback) = fallback_event {
+                        eprintln!(
+                            "warning: lifecycle hook '.hooks/{}' is deprecated. Please rename it to '.hooks/{}'.",
+                            fallback, event
+                        );
+                    }
+                    matches.extend(legacy_matches);
                 }
             }
         }
@@ -1148,7 +1245,7 @@ fn cmd_done_single(repo: &Repo, target_path: &Path) -> ExitCode {
         repo,
         target_path,
         HookEnv {
-            event: "done",
+            event: "close",
             target: Some(&target_rel),
             dest: None,
             old: None,
@@ -1301,7 +1398,7 @@ fn cmd_test(repo: &Repo) -> ExitCode {
                 let stem = path.file_stem().unwrap_or_default().to_string_lossy();
                 if !matches!(
                     stem.as_ref(),
-                    "show" | "status" | "done" | "add" | "link" | "mv" | "move" | "test" | "query" | "remove" | "help"
+                    "show" | "status" | "done" | "close" | "undone" | "open" | "add" | "link" | "blocks" | "mv" | "move" | "test" | "query" | "remove" | "help"
                 ) {
                     violations.push(format!(
                         "Invalid file in hook directory: '{}' (reserved hook names are show, status, done, add, link, mv, test, query)",
