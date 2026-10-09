@@ -837,7 +837,7 @@ fn print_tree_view(_root_path: &Path, items: &[(String, &'static str, bool)], _r
             } else {
                 if let Some(ind) = node.indicator {
                     if node.is_blocked {
-                        out.push_str(&format!("{}{} <span style=\"color: #777777;\">{}</span>\n", indent, ind, name));
+                        out.push_str(&format!("{}{} *{}* *(blocked)*\n", indent, ind, name));
                     } else {
                         out.push_str(&format!("{}{} {}\n", indent, ind, name));
                     }
