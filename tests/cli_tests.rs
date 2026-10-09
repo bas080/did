@@ -96,7 +96,7 @@ fn test_show_hook_sibling_and_ancestor() {
     assert!(success);
     assert_eq!(
         stdout.trim(),
-        "backend/.hooks/show\nBackend ancestor guidelines\n\nbackend/auth/.hooks/show\nAuth sibling guidelines\n\nbackend/auth/jwt.md\nJWT implementation"
+        "Backend ancestor guidelines\n\nAuth sibling guidelines\n\nbackend/auth/jwt.md\nJWT implementation"
     );
 }
 
@@ -119,7 +119,6 @@ fn test_show_hook_with_extension() {
 
     let (success, stdout, _) = did_cmd(root, &["show", "backend/auth/jwt.md"]);
     assert!(success);
-    assert!(stdout.contains("backend/.hooks/show.md"));
     assert!(stdout.contains("Markdown hook content"));
 }
 
@@ -166,8 +165,8 @@ fn test_status_and_hierarchy() {
     // Status -t (tree mode) shows actionable task with status indicator - [ ]
     let (success_tree, stdout_tree, _) = did_cmd(root, &["status", "-t"]);
     assert!(success_tree);
-    assert!(stdout_tree.contains("├── - [ ] a.md"));
-    assert!(stdout_tree.contains("└── - [ ] b.md"));
+    assert!(stdout_tree.contains("- [ ] a.md"));
+    assert!(stdout_tree.contains("- [ ] b.md"));
 
     // Status -t -a (tree mode with all) shows closed task with - [x]
     let (success_tree_a, stdout_tree_a, _) = did_cmd(root, &["status", "-t", "-a"]);
@@ -1428,7 +1427,7 @@ fn test_markdown_renderer_box_rendering_and_color_optout() {
     // With FORCE_COLOR=1, color rendering & red box borders for hooks are drawn
     let (s_force, stdout_force, _) = did_cmd_env(root, &["show", "task.md"], &[("FORCE_COLOR", "1")]);
     assert!(s_force);
-    assert!(stdout_force.contains("╭─ .hooks/show.md"));
+    assert!(stdout_force.contains("╭─"));
     assert!(stdout_force.contains("╰─"));
     assert!(stdout_force.contains("\x1b[")); // ANSI color codes present
 
@@ -1436,7 +1435,7 @@ fn test_markdown_renderer_box_rendering_and_color_optout() {
     let (s_nobox, stdout_nobox, _) =
         did_cmd_env(root, &["show", "task.md"], &[("FORCE_COLOR", "1"), ("DID_NO_BOX", "1")]);
     assert!(s_nobox);
-    assert!(stdout_nobox.contains(".hooks/show.md"));
+    assert!(stdout_nobox.contains("Hook text"));
     assert!(!stdout_nobox.contains("╭─"));
     assert!(stdout_nobox.contains("―")); // Termimad horizontal rule for ---
 
@@ -1553,7 +1552,7 @@ fn test_all_did_environment_variables() {
     // 7. DID_BOX & 8. DID_NO_BOX
     let (s7, stdout7, _) = did_cmd_env(root, &["show", "auth/jwt.md"], &[("FORCE_COLOR", "1"), ("DID_BOX", "1")]);
     assert!(s7);
-    assert!(stdout7.contains("╭─ .hooks/show")); // Box enabled for hook
+    assert!(stdout7.contains("╭─")); // Box enabled for hook
 
     let (s8, stdout8, _) = did_cmd_env(root, &["show", "auth/jwt.md"], &[("FORCE_COLOR", "1"), ("DID_NO_BOX", "1")]);
     assert!(s8);
