@@ -187,6 +187,7 @@ pub fn render_markdown(md: &str) {
 }
 
 /// Prints a section separator (`---`).
+#[allow(dead_code)]
 pub fn render_section_break() {
     if should_color() {
         render_markdown("\n---\n");
@@ -205,7 +206,7 @@ pub fn draw_box(title: &str, content_md: &str, style: BoxStyle) {
 pub fn draw_box_to<W: std::io::Write>(writer: &mut W, title: &str, content_md: &str, style: BoxStyle) {
     if !should_box() {
         if should_color() {
-            render_section_break();
+            let _ = writeln!(writer, "\n---\n");
             if !title.is_empty() {
                 let _ = writeln!(writer, "## {}", title);
             }

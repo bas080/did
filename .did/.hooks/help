@@ -1,7 +1,9 @@
+#!/bin/sh
 if [ -n "$DID_TOPIC" ]; then
     exit 0
 fi
 
+cat << 'EOF'
 # Directory Organization Guide
 
 Task and issue locations inside `.did/`:
@@ -9,3 +11,4 @@ Task and issue locations inside `.did/`:
 - `.did/implement/`: Ready-to-work issues with 100% complete specifications and concrete test plans.
 - `.did/wont/`: Rejected proposals and feature design decisions with rationale for not adopting.
 - `.did/backlog/`: Long-term ideas and non-core extensions.
+EOF

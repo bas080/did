@@ -1559,9 +1559,10 @@ fn cmd_test(repo: &Repo) -> ExitCode {
         ExitCode::FAILURE
     } else {
         if crate::renderer::should_color() {
-            crate::renderer::render_markdown(".did state directory is **clean**.");
+            crate::renderer::render_markdown(".did state directory is **clean**.\n\n*Note: Visually inspect every component and every aspect of those components across view flag variations (e.g. `--tree`, `--blocked`, `-a`) to ensure output visual polish.*");
         } else {
             println!(".did state directory is clean.");
+            println!("Note: Visually inspect every component and every aspect of those components across view flag variations (e.g. --tree, --blocked, -a) to ensure output visual polish.");
         }
         ExitCode::SUCCESS
     }
