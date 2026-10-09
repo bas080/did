@@ -88,7 +88,6 @@ impl Repo {
             None => return Vec::new(),
         };
 
-        let is_top_category = parent_dir.parent() == Some(&self.did_dir) || parent_dir == self.did_dir;
         let task_stem = task_file.file_stem().unwrap_or_default().to_string_lossy();
         let mut items = Vec::new();
 
@@ -108,13 +107,7 @@ impl Repo {
                     if dir_name.starts_with('.') {
                         continue;
                     }
-                    if is_top_category {
-                        if dir_name == task_stem {
-                            self.collect_unresolved_in_dir(&p, &mut items);
-                        }
-                    } else {
-                        self.collect_unresolved_in_dir(&p, &mut items);
-                    }
+                    self.collect_unresolved_in_dir(&p, &mut items);
                 }
             }
         }
