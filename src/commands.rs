@@ -837,7 +837,7 @@ fn print_tree_view(_root_path: &Path, items: &[(String, &'static str, bool)], _r
         None
     }
 
-    fn build_markdown_tree(map: &BTreeMap<String, MapNode>, depth: usize, out: &mut String) {
+    fn build_markdown_tree(map: &BTreeMap<String, MapNode>, depth: usize, use_color: bool, out: &mut String) {
         let indent = "  ".repeat(depth);
         let mut single_items = Vec::new();
         let mut multi_dirs = Vec::new();
@@ -851,22 +851,48 @@ fn print_tree_view(_root_path: &Path, items: &[(String, &'static str, bool)], _r
         }
 
         for (path, ind, is_blocked) in single_items {
-            if is_blocked {
-                out.push_str(&format!("{}{} *{}* *(blocked)*\n", indent, ind, path));
+            if use_color {
+                let ind_colored = if ind == "- [x]" {
+                    "\x1b[32m- [x]\x1b[0m"
+                } else {
+                    "\x1b[33m- [ ]\x1b[0m"
+                };
+                if is_blocked {
+                    out.push_str(&format!("{}{}{} \x1b[35m\x1b[3m{}\x1b[0m \x1b[90m(blocked)\x1b[0m\n", indent, ind_colored, "", path));
+                } else {
+                    out.push_str(&format!("{}{}{} {}\n", indent, ind_colored, "", path));
+                }
             } else {
-                out.push_str(&format!("{}{} {}\n", indent, ind, path));
+                if is_blocked {
+                    out.push_str(&format!("{}{} *{}* *(blocked)*\n", indent, ind, path));
+                } else {
+                    out.push_str(&format!("{}{} {}\n", indent, ind, path));
+                }
             }
         }
 
         for (name, node) in multi_dirs {
-            out.push_str(&format!("{}- **{}/**\n", indent, name));
-            build_markdown_tree(&node.children, depth + 1, out);
+            if use_color {
+                out.push_str(&format!("{}- \x1b[1m\x1b[36m{}/\x1b[0m\n", indent, name));
+            } else {
+                out.push_str(&format!("{}- **{}/**\n", indent, name));
+            }
+            build_markdown_tree(&node.children, depth + 1, use_color, out);
         }
     }
 
     let mut tree_md = String::new();
-    build_markdown_tree(&root_map, 0, &mut tree_md);
-    crate::renderer::render_markdown(&tree_md);
+    let use_color = crate::renderer::should_color();
+    build_markdown_tree(&root_map, 0, use_color, &mut tree_md);
+    if use_color {
+        if tree_md.ends_with('\n') {
+            print!("{}", tree_md);
+        } else {
+            println!("{}", tree_md);
+        }
+    } else {
+        crate::renderer::render_markdown(&tree_md);
+    }
 }
 
 fn print_results_with_limit(results: Vec<String>, empty_msg: &str) {
@@ -1182,6 +1208,11 @@ fn cmd_show(repo: &Repo, raw_path: &Path, _all: bool) -> ExitCode {
         if crate::renderer::should_box() || crate::renderer::should_color() {
             eprintln!();
             crate::renderer::draw_box_to(&mut std::io::stderr(), "Related", &related_md, crate::renderer::BoxStyle::AdditionalInfo);
+        } else {
+            eprintln!("\n[Related]");
+            for item in related {
+                eprintln!("  - {}", item);
+            }
         }
     }
 

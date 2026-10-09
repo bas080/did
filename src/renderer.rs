@@ -332,6 +332,9 @@ fn make_skin() -> MadSkin {
     skin.inline_code.set_fg(Color::Yellow);  // `Code`: Yellow
     skin.inline_code.set_bg(Color::Reset);
 
+    // Ensure indented code blocks have transparent background
+    skin.code_block.set_bg(Color::Reset);
+
     skin.bullet.set_fg(Color::Yellow);       // - Bullet: Yellow
     skin.quote_mark.set_fg(Color::Cyan);     // > Quote: Cyan
     skin
