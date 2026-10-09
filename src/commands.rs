@@ -641,7 +641,12 @@ fn cmd_status(repo: &Repo, raw_path: Option<&Path>, tree: bool, only_blocked: bo
         print_results_with_limit(results, empty_msg);
     }
 
-    eprintln!("[{} blocked, {} closed]", blocked_count, closed_count);
+    let summary_md = format!("{} blocked, {} closed", blocked_count, closed_count);
+    if crate::renderer::should_box() || crate::renderer::should_color() {
+        crate::renderer::draw_box_to(&mut std::io::stderr(), "", &summary_md, crate::renderer::BoxStyle::AdditionalInfo);
+    } else {
+        eprintln!("[{}]", summary_md);
+    }
 
     ExitCode::SUCCESS
 }
@@ -796,27 +801,33 @@ fn print_tree_view(_root_path: &Path, items: &[(String, &'static str)], _repo: &
         }
     }
 
-    fn build_markdown_tree(map: &BTreeMap<String, MapNode>, depth: usize, out: &mut String) {
+    fn build_markdown_tree(map: &BTreeMap<String, MapNode>, depth: usize, prefix_path: String, out: &mut String) {
         let indent = "  ".repeat(depth);
         for (name, node) in map {
+            let current_path = if prefix_path.is_empty() {
+                name.clone()
+            } else {
+                format!("{}/{}", prefix_path, name)
+            };
+
             if node.children.len() == 1 && node.indicator.is_none() {
-                // Skip directory branch if it has only one child
-                build_markdown_tree(&node.children, depth, out);
+                // Collapse directory branch if it has only one child
+                build_markdown_tree(&node.children, depth, current_path, out);
             } else {
                 if let Some(ind) = node.indicator {
-                    out.push_str(&format!("{} {} {}\n", indent, ind, name));
+                    out.push_str(&format!("{}- {} {}\n", indent, ind, name));
                 } else {
-                    out.push_str(&format!("{}* {}\n", indent, name));
+                    out.push_str(&format!("{}- **{}/**\n", indent, current_path));
                 }
                 if !node.children.is_empty() {
-                    build_markdown_tree(&node.children, depth + 1, out);
+                    build_markdown_tree(&node.children, depth + 1, String::new(), out);
                 }
             }
         }
     }
 
     let mut tree_md = String::new();
-    build_markdown_tree(&root_map, 0, &mut tree_md);
+    build_markdown_tree(&root_map, 0, String::new(), &mut tree_md);
     crate::renderer::render_markdown(&tree_md);
 }
 

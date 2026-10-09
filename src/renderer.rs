@@ -196,24 +196,30 @@ pub fn render_section_break() {
 }
 
 /// Renders a titled content block inside a border container.
-///
-/// If `should_box()` is false, section content is printed with a `---` separator instead.
 pub fn draw_box(title: &str, content_md: &str, style: BoxStyle) {
+    draw_box_to(&mut std::io::stdout(), title, content_md, style);
+}
+
+/// Renders a titled content block inside a border container to the specified writer.
+pub fn draw_box_to<W: std::io::Write>(writer: &mut W, title: &str, content_md: &str, style: BoxStyle) {
     if !should_box() {
         if should_color() {
             render_section_break();
             if !title.is_empty() {
-                println!("## {}", title);
+                let _ = writeln!(writer, "## {}", title);
             }
-            render_markdown(content_md);
+            let term_width = (terminal_size().0 as usize).clamp(40, 100);
+            let processed = highlight_and_box_codeblocks(content_md, term_width);
+            let skin = make_skin();
+            let _ = write!(writer, "{}", skin.text(&processed, Some(term_width)));
         } else {
             if !title.is_empty() {
-                println!("{}", title);
+                let _ = writeln!(writer, "{}", title);
             }
             if content_md.ends_with('\n') {
-                print!("{}", content_md);
+                let _ = write!(writer, "{}", content_md);
             } else {
-                println!("{}", content_md);
+                let _ = writeln!(writer, "{}", content_md);
             }
         }
         return;
@@ -261,13 +267,14 @@ pub fn draw_box(title: &str, content_md: &str, style: BoxStyle) {
     }
     top_line.push('╮');
 
-    println!("{}{}{}", color_code, top_line, reset);
+    let _ = writeln!(writer, "{}{}{}", color_code, top_line, reset);
 
     // Content lines
     for line in lines {
         let line_vis_width = visible_width(line);
         let padding = inner_width.saturating_sub(line_vis_width);
-        println!(
+        let _ = writeln!(
+            writer,
             "{}│{} {} {}{}│{}",
             color_code, reset, line, " ".repeat(padding), color_code, reset
         );
@@ -275,7 +282,7 @@ pub fn draw_box(title: &str, content_md: &str, style: BoxStyle) {
 
     // Bottom border
     let bottom_line = format!("╰{}╯", "─".repeat(term_width.saturating_sub(2)));
-    println!("{}{}{}", color_code, bottom_line, reset);
+    let _ = writeln!(writer, "{}{}{}", color_code, bottom_line, reset);
 }
 
 /// Helper function to compute visible display width excluding ANSI escape sequences.
