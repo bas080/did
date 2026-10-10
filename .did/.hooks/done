@@ -11,17 +11,17 @@ fi
 VARS=$(grep -r 'env::var("' src/ | sed -E 's/.*"([^"]+)".*/\1/' | grep '^DID_' | sort -u)
 MISSING=0
 for var in $VARS; do
-    if ! grep -q "$var" README.md && ! grep -q "$var" ADVANCED.md; then
+    if ! grep -q "$var" README.md; then
         echo "❌ Missing documentation for environment variable: $var"
         MISSING=$((MISSING + 1))
     fi
 done
 
 if [ $MISSING -ne 0 ]; then
-    echo "❌ $MISSING environment variable(s) are missing from README.md / ADVANCED.md"
+    echo "❌ $MISSING environment variable(s) are missing from README.md"
     exit 1
 fi
-echo "✅ All environment variables are documented in README.md / ADVANCED.md"
+echo "✅ All environment variables are documented in README.md"
 # ------------------------------------------------------------------------------
 
 echo "# Task Completion Guidelines"

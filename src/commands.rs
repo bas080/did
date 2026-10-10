@@ -20,32 +20,7 @@ fn symlink<P: AsRef<Path>, Q: AsRef<Path>>(original: P, link: Q) -> std::io::Res
     }
 }
 
-fn check_subcommand_alias_warning() {
-    let args: Vec<String> = env::args().collect();
-    if args.len() > 1 {
-        let invoked = &args[1];
-        let (alias, canonical) = match invoked.as_str() {
-            "list" => ("list", "status"),
-            "search" => ("search", "query"),
-            "link" => ("link", "blocks"),
-            "ln" => ("ln", "blocks"),
-            "move" => ("move", "mv"),
-            "remove" => ("remove", "rm"),
-            "done" => ("done", "close"),
-            "undone" => ("undone", "open"),
-            _ => ("", ""),
-        };
-        if !alias.is_empty() {
-            eprintln!(
-                "warning: subcommand alias '{}' is deprecated. Please use '{}' instead.",
-                alias, canonical
-            );
-        }
-    }
-}
-
 pub fn run(repo_opt: Option<Repo>, command: Commands, global_all: bool) -> ExitCode {
-    check_subcommand_alias_warning();
     match command {
         Commands::Add { path, message } => {
             let repo = match repo_opt {
@@ -69,7 +44,7 @@ pub fn run(repo_opt: Option<Repo>, command: Commands, global_all: bool) -> ExitC
             };
             cmd_add(&repo, &path, message)
         }
-        Commands::Blocks { target, dest } => {
+        Commands::Link { target, dest } => {
             let repo = match require_repo(repo_opt) {
                 Ok(r) => r,
                 Err(code) => return code,
@@ -90,19 +65,19 @@ pub fn run(repo_opt: Option<Repo>, command: Commands, global_all: bool) -> ExitC
             };
             cmd_rm(&repo, &path, recursive)
         }
-        Commands::Status { path, tree, blocked } => {
+        Commands::Status { path } => {
             let repo = match require_repo(repo_opt) {
                 Ok(r) => r,
                 Err(code) => return code,
             };
-            cmd_status(&repo, path.as_deref(), tree, blocked, global_all)
+            cmd_status(&repo, path.as_deref(), global_all)
         }
-        Commands::Query { query, path, line_number, tree } => {
+        Commands::Query { query, path } => {
             let repo = match require_repo(repo_opt) {
                 Ok(r) => r,
                 Err(code) => return code,
             };
-            cmd_search(&repo, &query, path.as_deref(), line_number, tree, global_all)
+            cmd_search(&repo, &query, path.as_deref(), global_all)
         }
         Commands::Show { path } => {
             let repo = match require_repo(repo_opt) {
@@ -123,19 +98,19 @@ pub fn run(repo_opt: Option<Repo>, command: Commands, global_all: bool) -> ExitC
             };
             cmd_log(&repo, path, since, until, json)
         }
-        Commands::Close { path, recursive } => {
+        Commands::Done { path, recursive } => {
             let repo = match require_repo(repo_opt) {
                 Ok(r) => r,
                 Err(code) => return code,
             };
             cmd_done(&repo, &path, recursive)
         }
-        Commands::Open { path, recursive } => {
+        Commands::Undone { path } => {
             let repo = match require_repo(repo_opt) {
                 Ok(r) => r,
                 Err(code) => return code,
             };
-            cmd_undone(&repo, &path, recursive)
+            cmd_undone(&repo, &path)
         }
         Commands::Test => {
             let repo = match require_repo(repo_opt) {
@@ -239,7 +214,6 @@ fn cmd_add(repo: &Repo, raw_path: &Path, message: Option<String>) -> ExitCode {
             dest: None,
             old: None,
             new: None,
-            topic: None,
         },
     )
     .is_err()
@@ -335,7 +309,6 @@ fn cmd_rm(repo: &Repo, raw_path: &Path, recursive: bool) -> ExitCode {
             dest: None,
             old: None,
             new: None,
-            topic: None,
         },
     )
     .is_err()
@@ -407,7 +380,6 @@ fn cmd_link(repo: &Repo, target_raw: &Path, dest_raw: &Path) -> ExitCode {
             dest: Some(&dest_rel),
             old: None,
             new: None,
-            topic: None,
         },
     )
     .is_err()
@@ -466,7 +438,6 @@ fn cmd_mv(repo: &Repo, old_raw: &Path, new_raw: &Path) -> ExitCode {
             dest: None,
             old: Some(&old_rel),
             new: Some(&new_rel),
-            topic: None,
         },
     )
     .is_err()
@@ -542,7 +513,7 @@ fn should_visit_entry(entry: &walkdir::DirEntry) -> bool {
     true
 }
 
-fn cmd_status(repo: &Repo, raw_path: Option<&Path>, tree: bool, only_blocked: bool, all: bool) -> ExitCode {
+fn cmd_status(repo: &Repo, raw_path: Option<&Path>, all: bool) -> ExitCode {
     let root_path = match raw_path {
         Some(p) => repo.resolve_path(p),
         None => {
@@ -576,7 +547,6 @@ fn cmd_status(repo: &Repo, raw_path: Option<&Path>, tree: bool, only_blocked: bo
             dest: None,
             old: None,
             new: None,
-            topic: None,
         },
     )
     .is_err()
@@ -584,7 +554,7 @@ fn cmd_status(repo: &Repo, raw_path: Option<&Path>, tree: bool, only_blocked: bo
         return ExitCode::FAILURE;
     }
 
-    let mut items = Vec::new();
+    let mut results = Vec::new();
     let mut blocked_count = 0;
     let mut closed_count = 0;
 
@@ -604,64 +574,34 @@ fn cmd_status(repo: &Repo, raw_path: Option<&Path>, tree: bool, only_blocked: bo
         if is_file || is_symlink {
             let file_name = path.file_name().unwrap_or_default().to_string_lossy();
             let is_hidden = file_name.starts_with('.');
-            let is_blocked = !is_hidden && repo.has_unresolved_subitems(path);
 
             if is_hidden {
                 closed_count += 1;
-            } else if is_blocked {
+                if all {
+                    results.push(repo.relative_display_path(path));
+                }
+            } else if has_unresolved_subitems(repo, path) {
                 blocked_count += 1;
-            }
-
-            let include_in_output = if only_blocked {
-                is_blocked
-            } else if all {
-                true
+                if all {
+                    results.push(repo.relative_display_path(path));
+                }
             } else {
-                !is_hidden && !is_blocked
-            };
-
-            if include_in_output {
-                let status_indicator = if is_hidden {
-                    "- [x]"
-                } else {
-                    "- [ ]"
-                };
-                items.push((repo.relative_display_path(path), status_indicator, is_blocked));
+                results.push(repo.relative_display_path(path));
             }
         }
     }
 
-    items.sort_by(|a, b| a.0.cmp(&b.0));
-    items.dedup_by(|a, b| a.0 == b.0);
+    results.sort();
+    results.dedup();
 
-    let empty_msg = if only_blocked {
-        "No blocked tasks found."
-    } else {
-        "No actionable tasks found."
-    };
+    print_results_with_limit(results, "No actionable tasks found.");
 
-    if tree {
-        if items.is_empty() {
-            eprintln!("{}", empty_msg);
-        } else {
-            print_tree_view(&root_path, &items, repo);
-        }
-    } else {
-        let results: Vec<String> = items.into_iter().map(|(p, _, _)| p).collect();
-        print_results_with_limit(results, empty_msg);
-    }
-
-    let summary_md = format!("{} blocked, {} closed", blocked_count, closed_count);
-    if crate::renderer::should_box() || crate::renderer::should_color() {
-        crate::renderer::draw_box_to(&mut std::io::stderr(), "", &summary_md, crate::renderer::BoxStyle::AdditionalInfo);
-    } else {
-        eprintln!("[{}]", summary_md);
-    }
+    eprintln!("[{} blocked, {} closed]", blocked_count, closed_count);
 
     ExitCode::SUCCESS
 }
 
-fn cmd_search(repo: &Repo, query: &str, raw_path: Option<&Path>, show_line_num: bool, tree: bool, all: bool) -> ExitCode {
+fn cmd_search(repo: &Repo, query: &str, raw_path: Option<&Path>, all: bool) -> ExitCode {
     let root_path = match raw_path {
         Some(p) => repo.resolve_path(p),
         None => repo.did_dir.clone(),
@@ -685,7 +625,6 @@ fn cmd_search(repo: &Repo, query: &str, raw_path: Option<&Path>, show_line_num: 
             dest: None,
             old: None,
             new: None,
-            topic: None,
         },
     )
     .is_err()
@@ -695,7 +634,6 @@ fn cmd_search(repo: &Repo, query: &str, raw_path: Option<&Path>, show_line_num: 
 
     let query_lower = query.to_lowercase();
     let mut results = Vec::new();
-    let mut tree_items = Vec::new();
 
     for entry in WalkDir::new(&root_path)
         .into_iter()
@@ -713,55 +651,26 @@ fn cmd_search(repo: &Repo, query: &str, raw_path: Option<&Path>, show_line_num: 
         if is_file || is_symlink {
             let file_name = path.file_name().unwrap_or_default().to_string_lossy();
             let is_hidden = file_name.starts_with('.');
-            let is_blocked = !is_hidden && repo.has_unresolved_subitems(path);
 
             let should_include = if all {
                 true
             } else {
-                !is_hidden && !is_blocked
+                !is_hidden && !has_unresolved_subitems(repo, path)
             };
 
             if should_include {
                 let rel_display = repo.relative_display_path(path);
                 let matches_path = rel_display.to_lowercase().contains(&query_lower);
-
-                let content_matches: Vec<(usize, String)> = if is_file {
-                    if let Ok(content) = fs::read_to_string(path) {
-                        content
-                            .lines()
-                            .enumerate()
-                            .filter_map(|(idx, line)| {
-                                if line.to_lowercase().contains(&query_lower) {
-                                    Some((idx + 1, line.to_string()))
-                                } else {
-                                    None
-                                }
-                            })
-                            .collect()
-                    } else {
-                        Vec::new()
-                    }
+                let matches_content = if is_file {
+                    fs::read_to_string(path)
+                        .ok()
+                        .map(|c| c.to_lowercase().contains(&query_lower))
+                        .unwrap_or(false)
                 } else {
-                    Vec::new()
+                    false
                 };
 
-                let status_indicator = if is_hidden {
-                    "- [x]"
-                } else {
-                    "- [ ]"
-                };
-
-                if !content_matches.is_empty() {
-                    tree_items.push((rel_display.clone(), status_indicator, is_blocked));
-                    for (line_num, snippet) in content_matches {
-                        if show_line_num {
-                            results.push(format!("{}:{}: {}", rel_display, line_num, snippet));
-                        } else {
-                            results.push(format!("{}: {}", rel_display, snippet));
-                        }
-                    }
-                } else if matches_path {
-                    tree_items.push((rel_display.clone(), status_indicator, is_blocked));
+                if matches_path || matches_content {
                     results.push(rel_display);
                 }
             }
@@ -770,18 +679,8 @@ fn cmd_search(repo: &Repo, query: &str, raw_path: Option<&Path>, show_line_num: 
 
     results.sort();
     results.dedup();
-    tree_items.sort_by(|a, b| a.0.cmp(&b.0));
-    tree_items.dedup_by(|a, b| a.0 == b.0);
 
-    if tree {
-        if tree_items.is_empty() {
-            eprintln!("No matching tasks found.");
-        } else {
-            print_tree_view(&root_path, &tree_items, repo);
-        }
-    } else {
-        print_results_with_limit(results, "No matching tasks found.");
-    }
+    print_results_with_limit(results, "No matching tasks found.");
 
     ExitCode::SUCCESS
 }
@@ -800,111 +699,6 @@ fn get_status_limit() -> Option<usize> {
         }
     }
     None
-}
-
-
-fn print_tree_view(_root_path: &Path, items: &[(String, &'static str, bool)], _repo: &Repo) {
-    use std::collections::BTreeMap;
-
-    struct MapNode {
-        indicator: Option<&'static str>,
-        is_blocked: bool,
-        children: BTreeMap<String, MapNode>,
-    }
-
-    let mut root_map: BTreeMap<String, MapNode> = BTreeMap::new();
-
-    for (rel_path, indicator, is_blocked) in items {
-        let path = Path::new(rel_path);
-        let components: Vec<_> = path.components().map(|c| c.as_os_str().to_string_lossy().to_string()).collect();
-        let mut curr = &mut root_map;
-
-        for (i, comp) in components.iter().enumerate() {
-            let is_leaf = i == components.len() - 1;
-            let entry = curr.entry(comp.clone()).or_insert_with(|| MapNode {
-                indicator: None,
-                is_blocked: false,
-                children: BTreeMap::new(),
-            });
-            if is_leaf {
-                entry.indicator = Some(indicator);
-                entry.is_blocked = *is_blocked;
-            }
-            curr = &mut entry.children;
-        }
-    }
-
-    fn get_single_leaf_path(name: &str, node: &MapNode) -> Option<(String, &'static str, bool)> {
-        if let Some(ind) = node.indicator {
-            if node.children.is_empty() {
-                return Some((name.to_string(), ind, node.is_blocked));
-            }
-        }
-        if node.children.len() == 1 {
-            let (child_name, child_node) = node.children.iter().next().unwrap();
-            if let Some((sub_path, ind, is_blocked)) = get_single_leaf_path(child_name, child_node) {
-                return Some((format!("{}/{}", name, sub_path), ind, is_blocked));
-            }
-        }
-        None
-    }
-
-    fn build_markdown_tree(map: &BTreeMap<String, MapNode>, depth: usize, use_color: bool, out: &mut String) {
-        let indent = "  ".repeat(depth);
-        let mut single_items = Vec::new();
-        let mut multi_dirs = Vec::new();
-
-        for (name, node) in map {
-            if let Some((collapsed_path, ind, is_blocked)) = get_single_leaf_path(name, node) {
-                single_items.push((collapsed_path, ind, is_blocked));
-            } else {
-                multi_dirs.push((name, node));
-            }
-        }
-
-        for (path, ind, is_blocked) in single_items {
-            if use_color {
-                let ind_colored = if ind == "- [x]" {
-                    "\x1b[32m- [x]\x1b[0m"
-                } else {
-                    "\x1b[33m- [ ]\x1b[0m"
-                };
-                if is_blocked {
-                    out.push_str(&format!("{}{}{} \x1b[35m\x1b[3m{}\x1b[0m \x1b[90m(blocked)\x1b[0m\n", indent, ind_colored, "", path));
-                } else {
-                    out.push_str(&format!("{}{}{} {}\n", indent, ind_colored, "", path));
-                }
-            } else {
-                if is_blocked {
-                    out.push_str(&format!("{}{} *{}* *(blocked)*\n", indent, ind, path));
-                } else {
-                    out.push_str(&format!("{}{} {}\n", indent, ind, path));
-                }
-            }
-        }
-
-        for (name, node) in multi_dirs {
-            if use_color {
-                out.push_str(&format!("{}- \x1b[1m\x1b[36m{}/\x1b[0m\n", indent, name));
-            } else {
-                out.push_str(&format!("{}- **{}/**\n", indent, name));
-            }
-            build_markdown_tree(&node.children, depth + 1, use_color, out);
-        }
-    }
-
-    let mut tree_md = String::new();
-    let use_color = crate::renderer::should_color();
-    build_markdown_tree(&root_map, 0, use_color, &mut tree_md);
-    if use_color {
-        if tree_md.ends_with('\n') {
-            print!("{}", tree_md);
-        } else {
-            println!("{}", tree_md);
-        }
-    } else {
-        crate::renderer::render_markdown(&tree_md);
-    }
 }
 
 fn print_results_with_limit(results: Vec<String>, empty_msg: &str) {
@@ -984,7 +778,7 @@ fn is_reserved_hook_file(path: &Path) -> bool {
     let stem = path.file_stem().unwrap_or_default().to_string_lossy();
     if matches!(
         stem.as_ref(),
-        "show" | "status" | "done" | "close" | "undone" | "open" | "add" | "link" | "blocks" | "mv" | "move" | "test" | "query" | "remove" | "help"
+        "show" | "status" | "done" | "add" | "link" | "mv" | "move" | "test" | "query" | "remove" | "help"
     ) {
         if let Some(parent) = path.parent() {
             let parent_name = parent.file_name().unwrap_or_default().to_string_lossy();
@@ -1002,7 +796,6 @@ struct HookEnv<'a> {
     dest: Option<&'a str>,
     old: Option<&'a str>,
     new: Option<&'a str>,
-    topic: Option<&'a str>,
 }
 
 fn run_ancestor_hooks(repo: &Repo, start_path: &Path, env_spec: HookEnv) -> Result<bool, ExitCode> {
@@ -1046,9 +839,6 @@ fn run_ancestor_hooks(repo: &Repo, start_path: &Path, env_spec: HookEnv) -> Resu
                 if let Some(n) = env_spec.new {
                     cmd.env("DID_NEW", n);
                 }
-                if let Some(tp) = env_spec.topic {
-                    cmd.env("DID_TOPIC", tp);
-                }
                 cmd.env("DID_REPO_ROOT", root_dir);
                 cmd.env("DID_STATE_DIR", &repo.did_dir);
 
@@ -1058,9 +848,13 @@ fn run_ancestor_hooks(repo: &Repo, start_path: &Path, env_spec: HookEnv) -> Resu
                         let stdout_str = String::from_utf8_lossy(&out.stdout);
                         if !stdout_str.is_empty() {
                             if printed_any {
-                                eprintln!();
+                                println!();
                             }
-                            crate::renderer::draw_box_to(&mut std::io::stderr(), "", &stdout_str, crate::renderer::BoxStyle::Hook);
+                            if stdout_str.ends_with('\n') {
+                                print!("{}", stdout_str);
+                            } else {
+                                println!("{}", stdout_str);
+                            }
                             printed_any = true;
                         }
                         let stderr_str = String::from_utf8_lossy(&out.stderr);
@@ -1082,11 +876,9 @@ fn run_ancestor_hooks(repo: &Repo, start_path: &Path, env_spec: HookEnv) -> Resu
                 }
             } else {
                 if printed_any {
-                    eprintln!();
+                    println!();
                 }
-                if let Ok(content) = fs::read_to_string(&hook_p) {
-                    crate::renderer::draw_box_to(&mut std::io::stderr(), "", &content, crate::renderer::BoxStyle::Hook);
-                }
+                print_file_content(repo, &hook_p);
                 printed_any = true;
             }
         }
@@ -1098,46 +890,26 @@ fn run_ancestor_hooks(repo: &Repo, start_path: &Path, env_spec: HookEnv) -> Resu
 fn find_hook_files(ancestor_dir: &Path, event: &str) -> Vec<PathBuf> {
     let mut matches = Vec::new();
 
-    let fallback_event = match event {
-        "close" => Some("done"),
-        "open" => Some("undone"),
-        "blocks" => Some("link"),
-        _ => None,
-    };
-
     for sub in &[".hooks", "hooks"] {
         let hook_dir = ancestor_dir.join(sub);
         if hook_dir.is_dir() {
             if let Ok(entries) = fs::read_dir(&hook_dir) {
-                let mut primary_matches = Vec::new();
-                let mut legacy_matches = Vec::new();
-
                 for entry in entries.flatten() {
                     let path = entry.path();
                     if path.is_file() {
                         if let Some(stem) = path.file_stem() {
-                            let stem_str = stem.to_string_lossy();
-                            if stem_str == event {
-                                primary_matches.push(path.clone());
-                            } else if let Some(fallback) = fallback_event {
-                                if stem_str == fallback {
-                                    legacy_matches.push(path.clone());
+                            if stem.to_string_lossy() == event {
+                                if std::env::var("DID_DEBUG").map(|v| !v.is_empty()).unwrap_or(false) {
+                                    eprintln!(
+                                        "[DEBUG] Hook check in '{}': found '{}'",
+                                        ancestor_dir.display(),
+                                        path.display()
+                                    );
                                 }
+                                matches.push(path);
                             }
                         }
                     }
-                }
-
-                if !primary_matches.is_empty() {
-                    matches.extend(primary_matches);
-                } else if !legacy_matches.is_empty() {
-                    if let Some(fallback) = fallback_event {
-                        eprintln!(
-                            "warning: lifecycle hook '.hooks/{}' is deprecated. Please rename it to '.hooks/{}'.",
-                            fallback, event
-                        );
-                    }
-                    matches.extend(legacy_matches);
                 }
             }
         }
@@ -1171,21 +943,11 @@ fn cmd_show(repo: &Repo, raw_path: &Path, _all: bool) -> ExitCode {
         return ExitCode::FAILURE;
     }
 
-    let blocking = repo.get_unresolved_blocking_items(&target_path);
+    let blocking = get_unresolved_blocking_items(repo, &target_path);
     if !blocking.is_empty() {
-        let mut block_md = String::new();
-        for item in &blocking {
-            block_md.push_str(&format!("* {}\n", item));
-        }
-        if crate::renderer::should_box() || crate::renderer::should_color() {
-            crate::renderer::draw_box_to(&mut std::io::stderr(), "Blocked", &block_md, crate::renderer::BoxStyle::AdditionalInfo);
-            eprintln!();
-        } else {
-            eprintln!("[Blocked]");
-            for item in blocking {
-                eprintln!("  - {}", item);
-            }
-            eprintln!();
+        eprintln!("[Blocked by unresolved sub-items:]");
+        for item in blocking {
+            eprintln!("  - {}", item);
         }
     }
 
@@ -1199,7 +961,6 @@ fn cmd_show(repo: &Repo, raw_path: &Path, _all: bool) -> ExitCode {
             dest: None,
             old: None,
             new: None,
-            topic: None,
         },
     ) {
         Ok(p) => p,
@@ -1210,23 +971,6 @@ fn cmd_show(repo: &Repo, raw_path: &Path, _all: bool) -> ExitCode {
         println!();
     }
     print_file_content(repo, &target_path);
-
-    let related = find_related_items(repo, &target_path);
-    if !related.is_empty() {
-        let mut related_md = String::new();
-        for item in &related {
-            related_md.push_str(&format!("* {}\n", item));
-        }
-        if crate::renderer::should_box() || crate::renderer::should_color() {
-            eprintln!();
-            crate::renderer::draw_box_to(&mut std::io::stderr(), "Related", &related_md, crate::renderer::BoxStyle::AdditionalInfo);
-        } else {
-            eprintln!("\n[Related]");
-            for item in related {
-                eprintln!("  - {}", item);
-            }
-        }
-    }
 
     ExitCode::SUCCESS
 }
@@ -1282,7 +1026,7 @@ fn cmd_done(repo: &Repo, raw_path: &Path, recursive: bool) -> ExitCode {
 
         // Validate that no task has blocking items OUTSIDE target_path
         for task in &tasks {
-            let blocking = repo.get_unresolved_blocking_items(task);
+            let blocking = get_unresolved_blocking_items(repo, task);
             let external_blocking: Vec<_> = blocking
                 .into_iter()
                 .filter(|item| {
@@ -1330,7 +1074,7 @@ fn cmd_done_single(repo: &Repo, target_path: &Path) -> ExitCode {
         return ExitCode::SUCCESS;
     }
 
-    let blocking = repo.get_unresolved_blocking_items(target_path);
+    let blocking = get_unresolved_blocking_items(repo, target_path);
     if !blocking.is_empty() {
         eprintln!(
             "error: cannot mark task '{}' done: unresolved sub-items remain:",
@@ -1347,12 +1091,11 @@ fn cmd_done_single(repo: &Repo, target_path: &Path) -> ExitCode {
         repo,
         target_path,
         HookEnv {
-            event: "close",
+            event: "done",
             target: Some(&target_rel),
             dest: None,
             old: None,
             new: None,
-            topic: None,
         },
     )
     .is_err()
@@ -1375,7 +1118,7 @@ fn cmd_done_single(repo: &Repo, target_path: &Path) -> ExitCode {
     ExitCode::SUCCESS
 }
 
-fn cmd_undone(repo: &Repo, raw_path: &Path, recursive: bool) -> ExitCode {
+fn cmd_undone(repo: &Repo, raw_path: &Path) -> ExitCode {
     let mut target_path = repo.resolve_path(raw_path);
 
     if !target_path.exists() && fs::symlink_metadata(&target_path).is_err() {
@@ -1403,47 +1146,14 @@ fn cmd_undone(repo: &Repo, raw_path: &Path, recursive: bool) -> ExitCode {
         }
     };
 
-    let is_dir = meta.is_dir() && !target_path.is_symlink();
-
-    if is_dir {
-        if !recursive {
-            eprintln!(
-                "error: cannot undone a directory: {}",
-                repo.relative_display_path(&target_path)
-            );
-            return ExitCode::FAILURE;
-        }
-
-        // Collect all resolved task files in directory
-        let mut tasks = Vec::new();
-        for entry in WalkDir::new(&target_path)
-            .into_iter()
-            .filter_entry(should_visit_entry)
-            .filter_map(|e| e.ok())
-        {
-            let p = entry.path();
-            if is_reserved_hook_file(p) || p.is_dir() {
-                continue;
-            }
-            let name = p.file_name().unwrap_or_default().to_string_lossy();
-            if name.starts_with('.') {
-                tasks.push(p.to_path_buf());
-            }
-        }
-
-        for task in tasks {
-            if cmd_undone_single(repo, &task) != ExitCode::SUCCESS {
-                return ExitCode::FAILURE;
-            }
-        }
-
-        ExitCode::SUCCESS
-    } else {
-        cmd_undone_single(repo, &target_path)
+    if meta.is_dir() {
+        eprintln!(
+            "error: cannot undone a directory: {}",
+            repo.relative_display_path(&target_path)
+        );
+        return ExitCode::FAILURE;
     }
-}
 
-fn cmd_undone_single(repo: &Repo, target_path: &Path) -> ExitCode {
     let file_name = match target_path.file_name() {
         Some(name) => name.to_string_lossy(),
         None => {
@@ -1455,26 +1165,8 @@ fn cmd_undone_single(repo: &Repo, target_path: &Path) -> ExitCode {
     if !file_name.starts_with('.') {
         eprintln!(
             "error: task '{}' is not resolved (does not start with a dot)",
-            repo.relative_display_path(target_path)
+            repo.relative_display_path(&target_path)
         );
-        return ExitCode::FAILURE;
-    }
-
-    let target_rel = repo.relative_display_path(target_path);
-    if run_ancestor_hooks(
-        repo,
-        target_path,
-        HookEnv {
-            event: "open",
-            target: Some(&target_rel),
-            dest: None,
-            old: None,
-            new: None,
-            topic: None,
-        },
-    )
-    .is_err()
-    {
         return ExitCode::FAILURE;
     }
 
@@ -1490,13 +1182,13 @@ fn cmd_undone_single(repo: &Repo, target_path: &Path) -> ExitCode {
         return ExitCode::FAILURE;
     }
 
-    if let Err(e) = fs::rename(target_path, &new_target_path) {
+    if let Err(e) = fs::rename(&target_path, &new_target_path) {
         eprintln!("error marking task undone: {}", e);
         return ExitCode::FAILURE;
     }
 
     // Update symlinks pointing to target_path across .did
-    update_symlinks(repo, target_path, &new_target_path);
+    update_symlinks(repo, &target_path, &new_target_path);
 
     ExitCode::SUCCESS
 }
@@ -1511,7 +1203,6 @@ fn cmd_test(repo: &Repo) -> ExitCode {
             dest: None,
             old: None,
             new: None,
-            topic: None,
         },
     )
     .is_err()
@@ -1553,10 +1244,10 @@ fn cmd_test(repo: &Repo) -> ExitCode {
                 let stem = path.file_stem().unwrap_or_default().to_string_lossy();
                 if !matches!(
                     stem.as_ref(),
-                    "show" | "status" | "done" | "close" | "undone" | "open" | "add" | "link" | "blocks" | "mv" | "move" | "test" | "query" | "remove" | "help"
+                    "show" | "status" | "done" | "add" | "link" | "mv" | "move" | "test" | "query" | "remove" | "help"
                 ) {
                     violations.push(format!(
-                        "Invalid file in hook directory: '{}' (reserved hook names are show, status, close, open, add, blocks, mv, test, query, remove, help)",
+                        "Invalid file in hook directory: '{}' (reserved hook names are show, status, done, add, link, mv, test, query)",
                         rel_display
                     ));
                 }
@@ -1594,32 +1285,16 @@ fn cmd_test(repo: &Repo) -> ExitCode {
     }
 
     if !violations.is_empty() {
-        if crate::renderer::should_color() {
-            let mut msg = format!(
-                "**error:** `.did` repository health check failed with **{}** violations:\n\n",
-                violations.len()
-            );
-            for v in &violations {
-                msg.push_str(&format!("* {}\n", v));
-            }
-            crate::renderer::render_markdown(&msg);
-        } else {
-            eprintln!(
-                "error: .did repository health check failed with {} violations:",
-                violations.len()
-            );
-            for v in violations {
-                eprintln!("  - {}", v);
-            }
+        eprintln!(
+            "error: .did repository health check failed with {} violations:",
+            violations.len()
+        );
+        for v in violations {
+            eprintln!("  - {}", v);
         }
         ExitCode::FAILURE
     } else {
-        if crate::renderer::should_color() {
-            crate::renderer::render_markdown(".did state directory is **clean**.\n\n*Note: Visually inspect every component and every aspect of those components across view flag variations (e.g. `--tree`, `--blocked`, `-a`) to ensure output visual polish.*");
-        } else {
-            println!(".did state directory is clean.");
-            println!("Note: Visually inspect every component and every aspect of those components across view flag variations (e.g. --tree, --blocked, -a) to ensure output visual polish.");
-        }
+        println!(".did state directory is clean.");
         ExitCode::SUCCESS
     }
 }
@@ -1643,7 +1318,6 @@ pub fn cmd_help(repo_opt: Option<&Repo>, topic: Option<&str>) -> ExitCode {
                 dest: None,
                 old: None,
                 new: None,
-                topic,
             },
         ) {
             printed_hook = printed;
@@ -1671,7 +1345,7 @@ pub fn cmd_help(repo_opt: Option<&Repo>, topic: Option<&str>) -> ExitCode {
         }
         Some(t) => {
             let t_resolved = match t {
-                "ln" | "link" => "blocks",
+                "ln" => "link",
                 "search" => "query",
                 "move" => "mv",
                 "remove" => "rm",
@@ -1696,7 +1370,8 @@ pub fn cmd_help(repo_opt: Option<&Repo>, topic: Option<&str>) -> ExitCode {
 }
 
 fn print_hooks_topic_help() {
-    let doc = "# Lifecycle Hooks Documentation (`did help hooks`)\n\n\
+    println!(
+        "# Lifecycle Hooks Documentation (`did help hooks`)\n\n\
         In `did`, any directory in `.did/` can contain a `.hooks/` directory with hook scripts\n\
         or static files named after lifecycle events.\n\n\
         ## Hook Discovery & Precedence\n\
@@ -1724,8 +1399,8 @@ fn print_hooks_topic_help() {
         - `rm`: Executed before removing in `did rm <PATH>`\n\
         - `query`: Executed during search in `did query <QUERY>`\n\
         - `test`: Executed during repository health check in `did test`\n\
-        - `help`: Executed during `did help [TOPIC]`\n";
-    crate::renderer::render_markdown(doc);
+        - `help`: Executed during `did help [TOPIC]`"
+    );
 }
 
 fn cmd_autocomplete(shell: &str) -> ExitCode {
@@ -1749,64 +1424,12 @@ fn cmd_autocomplete(shell: &str) -> ExitCode {
     ExitCode::SUCCESS
 }
 
-
-fn get_related_limit() -> usize {
-    if let Ok(val) = env::var("DID_RELATED_LIMIT") {
-        if let Ok(limit) = val.parse::<usize>() {
-            return limit;
-        }
-    }
-    5
-}
-
-fn find_related_items(repo: &Repo, task_path: &Path) -> Vec<String> {
-    let parent_dir = match task_path.parent() {
-        Some(p) => p,
-        None => return Vec::new(),
-    };
-
-    let self_rel = repo.relative_display_path(task_path);
-    let limit = get_related_limit();
-    let mut related = Vec::new();
-
-    if let Ok(entries) = fs::read_dir(parent_dir) {
-        for entry in entries.flatten() {
-            let p = entry.path();
-            if p == task_path || is_reserved_hook_file(&p) {
-                continue;
-            }
-
-            let is_symlink = p.is_symlink();
-            let is_file = p.is_file();
-
-            if is_file || is_symlink {
-                let file_name = p.file_name().unwrap_or_default().to_string_lossy();
-                if file_name.starts_with('.') {
-                    continue;
-                }
-
-                let rel_display = repo.relative_display_path(&p);
-                if rel_display != self_rel {
-                    related.push(rel_display);
-                }
-            }
-        }
-    }
-
-    related.sort();
-    related.dedup();
-    related.truncate(limit);
-    related
-}
-
 fn print_file_content(repo: &Repo, path: &Path) {
     let rel = repo.relative_display_path(path);
+    println!("{}", rel);
     match fs::read_to_string(path) {
         Ok(content) => {
-            println!("{}", rel);
-            if crate::renderer::should_color() {
-                crate::renderer::render_markdown(&content);
-            } else if content.ends_with('\n') {
+            if content.ends_with('\n') {
                 print!("{}", content);
             } else {
                 println!("{}", content);
@@ -1818,6 +1441,89 @@ fn print_file_content(repo: &Repo, path: &Path) {
     }
 }
 
+/// Returns a list of unresolved blocking items (relative paths and symlink targets) under child subdirectories of `task_file`.
+fn get_unresolved_blocking_items(repo: &Repo, task_file: &Path) -> Vec<String> {
+    let parent_dir = match task_file.parent() {
+        Some(p) => p,
+        None => return Vec::new(),
+    };
+
+    let is_root_dir = parent_dir == repo.did_dir;
+    let task_stem = task_file.file_stem().unwrap_or_default().to_string_lossy();
+    let mut items = Vec::new();
+
+    if task_stem == "index" {
+        collect_unresolved_in_dir(repo, parent_dir, &mut items);
+        let self_rel = repo.relative_display_path(task_file);
+        items.retain(|item| item != &self_rel);
+    } else {
+        if let Ok(entries) = fs::read_dir(parent_dir) {
+            for entry in entries.flatten() {
+                let p = entry.path();
+                if p == task_file {
+                    continue;
+                }
+                let is_symlink = p.is_symlink();
+                if p.is_dir() && !is_symlink {
+                    let dir_name = p.file_name().unwrap_or_default().to_string_lossy();
+                    if dir_name.starts_with('.') {
+                        continue;
+                    }
+                    if is_root_dir {
+                        if dir_name == task_stem {
+                            collect_unresolved_in_dir(repo, &p, &mut items);
+                        }
+                    } else {
+                        collect_unresolved_in_dir(repo, &p, &mut items);
+                    }
+                }
+            }
+        }
+    }
+
+    items.sort();
+    items.dedup();
+
+    if !items.is_empty() && std::env::var("DID_DEBUG").map(|v| !v.is_empty()).unwrap_or(false) {
+        eprintln!(
+            "[DEBUG] Blocking check for '{}': {} unresolved child sub-items found",
+            repo.relative_display_path(task_file),
+            items.len()
+        );
+    }
+
+    items
+}
+
+fn collect_unresolved_in_dir(repo: &Repo, dir: &Path, items: &mut Vec<String>) {
+    let dir_name = dir.file_name().unwrap_or_default().to_string_lossy();
+    if dir_name.starts_with('.') {
+        return;
+    }
+    for entry in WalkDir::new(dir).into_iter().filter_map(|e| e.ok()) {
+        let p = entry.path();
+        if is_reserved_hook_file(p) {
+            continue;
+        }
+        let name = p.file_name().unwrap_or_default().to_string_lossy();
+        if name.starts_with('.') {
+            continue;
+        }
+        if p.is_symlink() {
+            let target_str = fs::read_link(p)
+                .map(|t| t.to_string_lossy().to_string())
+                .unwrap_or_default();
+            items.push(format!("{} -> {}", repo.relative_display_path(p), target_str));
+        } else if p.is_file() {
+            items.push(repo.relative_display_path(p));
+        }
+    }
+}
+
+/// Checks if a task file has any unresolved sub-items (deeper subdirectories).
+fn has_unresolved_subitems(repo: &Repo, task_file: &Path) -> bool {
+    !get_unresolved_blocking_items(repo, task_file).is_empty()
+}
 
 fn normalize_path(path: &Path) -> PathBuf {
     let mut components = Vec::new();

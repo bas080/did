@@ -61,12 +61,6 @@ fn test_add_and_show() {
     assert!(!success_show_dir);
     assert!(stderr_show_dir.contains("requires a task file, got directory"));
     assert!(stderr_show_dir.contains("Use 'did status backend' instead"));
-
-    // Status -b lists blocked tasks
-    did_cmd(root, &["add", "backend/auth/sub/c.md", "-m", "Task C"]);
-    let (success_b, stdout_b, _) = did_cmd(root, &["status", "-b"]);
-    assert!(success_b);
-    assert!(stdout_b.contains("backend/auth/jwt.md"));
 }
 
 #[test]
@@ -92,12 +86,12 @@ fn test_show_hook_sibling_and_ancestor() {
     fs::create_dir_all(sibling_hook.parent().unwrap()).unwrap();
     fs::write(&sibling_hook, "Auth sibling guidelines").unwrap();
 
-    let (success, stdout, stderr) = did_cmd(root, &["show", "backend/auth/jwt.md"]);
+    let (success, stdout, _) = did_cmd(root, &["show", "backend/auth/jwt.md"]);
     assert!(success);
-    assert!(stderr.contains("Backend ancestor guidelines"));
-    assert!(stderr.contains("Auth sibling guidelines"));
-    assert!(stdout.contains("backend/auth/jwt.md"));
-    assert!(stdout.contains("JWT implementation"));
+    assert_eq!(
+        stdout.trim(),
+        "backend/.hooks/show\nBackend ancestor guidelines\n\nbackend/auth/.hooks/show\nAuth sibling guidelines\n\nbackend/auth/jwt.md\nJWT implementation"
+    );
 }
 
 #[test]
@@ -117,10 +111,10 @@ fn test_show_hook_with_extension() {
     fs::create_dir_all(ancestor_hook.parent().unwrap()).unwrap();
     fs::write(&ancestor_hook, "Markdown hook content").unwrap();
 
-    let (success, stdout, stderr) = did_cmd(root, &["show", "backend/auth/jwt.md"]);
+    let (success, stdout, _) = did_cmd(root, &["show", "backend/auth/jwt.md"]);
     assert!(success);
-    assert!(stderr.contains("Markdown hook content"));
-    assert!(stdout.contains("JWT implementation"));
+    assert!(stdout.contains("backend/.hooks/show.md"));
+    assert!(stdout.contains("Markdown hook content"));
 }
 
 #[test]
@@ -162,17 +156,6 @@ fn test_status_and_hierarchy() {
     // Status -a shows resolved task as well
     let (_, stdout_stat_a, _) = did_cmd(root, &["status", "-a"]);
     assert!(stdout_stat_a.contains("backend/auth/sub/.c.md"));
-
-    // Status -t (tree mode) shows actionable task with status indicator [ ]
-    let (success_tree, stdout_tree, _) = did_cmd(root, &["status", "-t"]);
-    assert!(success_tree);
-    assert!(stdout_tree.contains("[ ] a.md"));
-    assert!(stdout_tree.contains("[ ] b.md"));
-
-    // Status -t -a (tree mode with all) shows closed task with [x]
-    let (success_tree_a, stdout_tree_a, _) = did_cmd(root, &["status", "-t", "-a"]);
-    assert!(success_tree_a);
-    assert!(stdout_tree_a.contains("- [x] sub/.c.md") || stdout_tree_a.contains("[x] sub/.c.md"));
 }
 
 #[test]
@@ -209,10 +192,10 @@ fn test_status_default_path_env() {
     assert!(stdout1.contains("subdir/task1.md"));
     assert!(!stdout1.contains("root_task.md"));
 
-    // Explicit path CLI argument takes precedence over DID_STATUS_PATH (with -a to show blocked item)
+    // Explicit path CLI argument takes precedence over DID_STATUS_PATH
     let (success2, stdout2, _) = did_cmd_env(
         root,
-        &["status", "-a", "root_task.md"],
+        &["status", "root_task.md"],
         &[("DID_STATUS_PATH", "subdir")],
     );
     assert!(success2);
@@ -234,8 +217,8 @@ fn test_show_and_done_blocked_output() {
     let (success_show, stdout_show, stderr_show) = did_cmd(root, &["show", "backend/auth.md"]);
     assert!(success_show);
     assert!(stdout_show.contains("Auth task"));
-    assert!(stderr_show.contains("[Blocked]") || stdout_show.contains("Blocked"));
-    assert!(stderr_show.contains("- backend/auth/sub/research.md") || stdout_show.contains("backend/auth/sub/research.md"));
+    assert!(stderr_show.contains("[Blocked by unresolved sub-items:]"));
+    assert!(stderr_show.contains("- backend/auth/sub/research.md"));
 
     // done backend/auth.md fails and lists blocking sub-items in stderr
     let (success_done, _, stderr_done) = did_cmd(root, &["done", "backend/auth.md"]);
@@ -251,29 +234,29 @@ fn test_link_and_done_updates_symlink() {
 
     fs::create_dir_all(root.join(".did")).unwrap();
 
-    did_cmd(root, &["add", "specs/feature.md", "-m", "Feature requirement"]);
+    did_cmd(root, &["add", "feature.md", "-m", "Feature requirement"]);
     did_cmd(
         root,
         &["add", "backend/server.md", "-m", "Server implementation"],
     );
 
-    // Link specs/feature.md into backend/
-    let (success_link, _, _) = did_cmd(root, &["link", "specs/feature.md", "backend"]);
+    // Link feature.md into backend/
+    let (success_link, _, _) = did_cmd(root, &["link", "feature.md", "backend"]);
     assert!(success_link);
 
     let symlink_file = root.join(".did/backend/feature.md");
     assert!(symlink_file.is_symlink());
 
-    // Complete specs/feature.md
-    let (success_done_feat, _, _) = did_cmd(root, &["done", "specs/feature.md"]);
+    // Complete feature.md
+    let (success_done_feat, _, _) = did_cmd(root, &["done", "feature.md"]);
     assert!(success_done_feat);
-    assert!(root.join(".did/specs/.feature.md").is_file());
+    assert!(root.join(".did/.feature.md").is_file());
 
     // Symlink inside backend should be updated to .feature.md!
     let updated_symlink = root.join(".did/backend/.feature.md");
     assert!(updated_symlink.is_symlink());
     let target = fs::read_link(&updated_symlink).unwrap();
-    assert_eq!(target, Path::new("../specs/.feature.md"));
+    assert_eq!(target, Path::new("../.feature.md"));
 
     // Now server.md is actionable!
     let (_, stdout_stat2, _) = did_cmd(root, &["status"]);
@@ -296,25 +279,20 @@ fn test_search_feature() {
     did_cmd(root, &["add", "frontend/login.md", "-m", "Calls JWT auth endpoint"]);
     did_cmd(root, &["add", "docs/notes.md", "-m", "General documentation"]);
 
-    // Search "jwt" matches backend/auth/jwt.md (path) and frontend/login.md (content snippet)
+    // Search "jwt" matches backend/auth/jwt.md (path) and frontend/login.md (content)
     let (success1, stdout1, _) = did_cmd(root, &["search", "jwt"]);
     assert!(success1);
-    assert_eq!(stdout1.trim(), "backend/auth/jwt.md\nfrontend/login.md: Calls JWT auth endpoint");
-
-    // Search "jwt" with -n / --line-number
-    let (success_n, stdout_n, _) = did_cmd(root, &["search", "-n", "jwt"]);
-    assert!(success_n);
-    assert_eq!(stdout_n.trim(), "backend/auth/jwt.md\nfrontend/login.md:1: Calls JWT auth endpoint");
+    assert_eq!(stdout1.trim(), "backend/auth/jwt.md\nfrontend/login.md");
 
     // Case-insensitive search "TOKEN"
     let (success2, stdout2, _) = did_cmd(root, &["search", "TOKEN"]);
     assert!(success2);
-    assert_eq!(stdout2.trim(), "backend/auth/jwt.md: Token verification");
+    assert_eq!(stdout2.trim(), "backend/auth/jwt.md");
 
     // Search with subtree path argument
     let (success3, stdout3, _) = did_cmd(root, &["search", "jwt", "frontend"]);
     assert!(success3);
-    assert_eq!(stdout3.trim(), "frontend/login.md: Calls JWT auth endpoint");
+    assert_eq!(stdout3.trim(), "frontend/login.md");
 
     // Search with -a flag and blocked items
     did_cmd(root, &["add", "backend/auth/jwt/subtask.md", "-m", "JWT helper task"]);
@@ -826,12 +804,12 @@ fn test_hook_environment_variables() {
 
         did_cmd(root, &["add", "task.md", "-m", "Task content"]);
 
-        let (success, _, stderr) = did_cmd(root, &["show", "task.md"]);
+        let (success, stdout, _) = did_cmd(root, &["show", "task.md"]);
         assert!(success);
-        assert!(stderr.contains("EVENT=show"));
-        assert!(stderr.contains("TARGET=task.md"));
-        assert!(stderr.contains("REPO="));
-        assert!(stderr.contains("STATE="));
+        assert!(stdout.contains("EVENT=show"));
+        assert!(stdout.contains("TARGET=task.md"));
+        assert!(stdout.contains("REPO="));
+        assert!(stdout.contains("STATE="));
     }
 }
 
@@ -880,9 +858,9 @@ fn test_add_non_executable_hook_and_no_newline_msg() {
     fs::create_dir_all(hook.parent().unwrap()).unwrap();
     fs::write(&hook, "Static Add Hook Guidance").unwrap();
 
-    let (success, _, stderr) = did_cmd(root, &["add", "task1.md", "-m", "No newline message"]);
+    let (success, stdout, _) = did_cmd(root, &["add", "task1.md", "-m", "No newline message"]);
     assert!(success);
-    assert!(stderr.contains("Static Add Hook Guidance"));
+    assert!(stdout.contains("Static Add Hook Guidance"));
 
     let task_content = fs::read_to_string(root.join(".did/task1.md")).unwrap();
     assert_eq!(task_content, "No newline message\n");
@@ -906,9 +884,9 @@ fn test_add_hook_stdout_stderr_handling() {
         perms.set_mode(0o755);
         fs::set_permissions(&hook, perms).unwrap();
 
-        let (success, _, stderr) = did_cmd(root, &["add", "task2.md", "-m", "Content"]);
+        let (success, stdout, stderr) = did_cmd(root, &["add", "task2.md", "-m", "Content"]);
         assert!(success);
-        assert!(stderr.contains("hook stdout"));
+        assert!(stdout.contains("hook stdout"));
         assert!(stderr.contains("hook stderr"));
     }
 }
@@ -1078,9 +1056,9 @@ fn test_done_hook_stdout_and_stderr() {
         perms.set_mode(0o755);
         fs::set_permissions(&hook, perms).unwrap();
 
-        let (success, _, stderr) = did_cmd(root, &["done", "task.md"]);
+        let (success, stdout, stderr) = did_cmd(root, &["done", "task.md"]);
         assert!(success);
-        assert!(stderr.contains("done stdout"));
+        assert!(stdout.contains("done stdout"));
         assert!(stderr.contains("done stderr"));
     }
 }
@@ -1105,9 +1083,9 @@ fn test_show_hook_stdout_no_newline_and_stderr_failure() {
         perms.set_mode(0o755);
         fs::set_permissions(&hook, perms).unwrap();
 
-        let (success, _, stderr) = did_cmd(root, &["show", "task.md"]);
+        let (success, stdout, stderr) = did_cmd(root, &["show", "task.md"]);
         assert!(!success);
-        assert!(stderr.contains("show stdout"));
+        assert!(stdout.contains("show stdout"));
         assert!(stderr.contains("show error"));
     }
 }
@@ -1167,9 +1145,9 @@ fn test_status_link_and_mv_hooks() {
         did_cmd(root, &["add", "task.md", "-m", "Task"]);
         did_cmd(root, &["add", "blocked_task.md", "-m", "Blocked"]);
 
-        let (s_stat, _, stderr_stat) = did_cmd(root, &["status"]);
+        let (s_stat, stdout_stat, _) = did_cmd(root, &["status"]);
         assert!(s_stat);
-        assert!(stderr_stat.contains("Status hook running"));
+        assert!(stdout_stat.contains("Status hook running"));
 
         let (s_link_ok, _, _) = did_cmd(root, &["link", "task.md", "dest1"]);
         assert!(s_link_ok);
@@ -1306,9 +1284,9 @@ fn test_non_executable_done_hook_reminds() {
     fs::create_dir_all(hook.parent().unwrap()).unwrap();
     fs::write(&hook, "REMINDER: Mark undone if incomplete").unwrap();
 
-    let (success, _, stderr) = did_cmd(root, &["done", "task.md"]);
+    let (success, stdout, _) = did_cmd(root, &["done", "task.md"]);
     assert!(success);
-    assert!(stderr.contains("REMINDER: Mark undone if incomplete"));
+    assert!(stdout.contains("REMINDER: Mark undone if incomplete"));
     assert!(root.join(".did/.task.md").is_file());
 }
 
@@ -1323,9 +1301,9 @@ fn test_help_command_and_hook() {
     fs::create_dir_all(hook.parent().unwrap()).unwrap();
     fs::write(&hook, "Static Help Guidance").unwrap();
 
-    let (success, stdout, stderr) = did_cmd(root, &["help"]);
+    let (success, stdout, _) = did_cmd(root, &["help"]);
     assert!(success);
-    assert!(stderr.contains("Static Help Guidance"));
+    assert!(stdout.contains("Static Help Guidance"));
     assert!(stdout.contains("Usage:"));
 }
 
@@ -1392,192 +1370,10 @@ fn test_executable_help_hook() {
         perms.set_mode(0o755);
         fs::set_permissions(&hook, perms).unwrap();
 
-        let (success, _, stderr) = did_cmd(root, &["help"]);
+        let (success, stdout, _) = did_cmd(root, &["help"]);
         assert!(success);
-        assert!(stderr.contains("CUSTOM HELP HOOK RUNNING"));
+        assert!(stdout.contains("CUSTOM HELP HOOK RUNNING"));
     }
-}
-
-#[test]
-fn test_show_content_unboxed_when_nocolor() {
-    let dir = tempdir().unwrap();
-    let root = dir.path();
-
-    fs::create_dir_all(root.join(".did")).unwrap();
-
-    did_cmd(root, &["add", "task.md", "-m", "# Task Title\nTask body"]);
-
-    let (_, stdout_md, _) = did_cmd(root, &["show", "task.md"]);
-    assert!(stdout_md.contains("task.md"));
-    assert!(stdout_md.contains("# Task Title"));
-    assert!(stdout_md.contains("Task body"));
-}
-
-#[test]
-fn test_markdown_renderer_box_rendering_and_color_optout() {
-    let dir = tempdir().unwrap();
-    let root = dir.path();
-
-    fs::create_dir_all(root.join(".did")).unwrap();
-    did_cmd(root, &["add", "task.md", "-m", "# Title"]);
-
-    let ancestor_hook = root.join(".did/.hooks/show.md");
-    fs::create_dir_all(ancestor_hook.parent().unwrap()).unwrap();
-    fs::write(&ancestor_hook, "Hook text").unwrap();
-
-    // With FORCE_COLOR=1, color rendering & red box borders for hooks are drawn on stderr
-    let (s_force, _, stderr_force) = did_cmd_env(root, &["show", "task.md"], &[("FORCE_COLOR", "1")]);
-    assert!(s_force);
-    assert!(stderr_force.contains("╭─"));
-    assert!(stderr_force.contains("╰─"));
-    assert!(stderr_force.contains("\x1b[")); // ANSI color codes present
-
-    // With DID_NO_BOX=1 & FORCE_COLOR=1, sections are separated with ---
-    let (s_nobox, _, stderr_nobox) =
-        did_cmd_env(root, &["show", "task.md"], &[("FORCE_COLOR", "1"), ("DID_NO_BOX", "1")]);
-    assert!(s_nobox);
-    assert!(stderr_nobox.contains("Hook text"));
-    assert!(!stderr_nobox.contains("╭─"));
-
-    // With NO_COLOR=1 & DID_NO_BOX=1, unboxed plain text is returned
-    let (s_nocolor, stdout_nocolor, _) =
-        did_cmd_env(root, &["show", "task.md"], &[("NO_COLOR", "1"), ("DID_NO_BOX", "1")]);
-    assert!(s_nocolor);
-    assert!(stdout_nocolor.contains("task.md"));
-    assert!(!stdout_nocolor.contains("╭─"));
-
-    // With DID_NO_COLOR=1, color rendering is opted out
-    let (s_didno, stdout_didno, _) =
-        did_cmd_env(root, &["show", "task.md"], &[("FORCE_COLOR", "1"), ("DID_NO_COLOR", "1")]);
-    assert!(s_didno);
-    assert!(!stdout_didno.contains("\x1b[31m"));
-
-    // With DID_COLOR=0, color rendering is opted out
-    let (s_didc0, stdout_didc0, _) =
-        did_cmd_env(root, &["show", "task.md"], &[("FORCE_COLOR", "1"), ("DID_COLOR", "0")]);
-    assert!(s_didc0);
-    assert!(!stdout_didc0.contains("\x1b[31m"));
-}
-
-#[test]
-fn test_codeblock_syntax_highlighting_and_boxing() {
-    let dir = tempdir().unwrap();
-    let root = dir.path();
-
-    fs::create_dir_all(root.join(".did")).unwrap();
-    did_cmd(
-        root,
-        &[
-            "add",
-            "tryit.md",
-            "-m",
-            "# Lovely\n\n```html\n<body>\n  <i>Hi</i>\n</body>\n```",
-        ],
-    );
-
-    // With FORCE_COLOR=1, the task file is rendered with syntax highlighting
-    let (s_force, stdout_force, _) =
-        did_cmd_env(root, &["show", "tryit.md"], &[("FORCE_COLOR", "1")]);
-    assert!(s_force);
-    assert!(stdout_force.contains("body"));
-    assert!(stdout_force.contains("Hi"));
-    assert!(stdout_force.contains("\x1b[")); // ANSI color codes present
-
-    // With NO_COLOR=1, unboxed raw markdown is returned
-    let (s_nocolor, stdout_nocolor, _) = did_cmd_env(
-        root,
-        &["show", "tryit.md"],
-        &[("FORCE_COLOR", "1"), ("NO_COLOR", "1")],
-    );
-    assert!(s_nocolor);
-    assert!(stdout_nocolor.contains("```html"));
-    assert!(!stdout_nocolor.contains("\x1b["));
-}
-
-#[test]
-fn test_all_did_environment_variables() {
-    let dir = tempdir().unwrap();
-    let root = dir.path();
-
-    fs::create_dir_all(root.join(".did")).unwrap();
-
-    did_cmd(root, &["add", "auth/jwt.md", "-m", "# Auth JWT Implementation\nDetails"]);
-    did_cmd(root, &["add", "auth/session.md", "-m", "# Auth Session Management\nDetails"]);
-
-    let hook = root.join(".did/.hooks/show");
-    fs::create_dir_all(hook.parent().unwrap()).unwrap();
-    fs::write(
-        &hook,
-        "#!/bin/sh\necho EVENT=$DID_EVENT\necho TARGET=$DID_TARGET\necho REPO=$DID_REPO_ROOT\necho STATE=$DID_STATE_DIR\n",
-    )
-    .unwrap();
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let mut perms = fs::metadata(&hook).unwrap().permissions();
-        perms.set_mode(0o755);
-        fs::set_permissions(&hook, perms).unwrap();
-    }
-
-    // 1. DID_STATUS_LIMIT
-    let (s1, stdout1, stderr1) = did_cmd_env(root, &["status"], &[("DID_STATUS_LIMIT", "1")]);
-    assert!(s1);
-    assert_eq!(stdout1.trim().lines().count(), 1);
-    assert!(stderr1.contains("status limit reached"));
-
-    // 2. DID_STATUS_PATH
-    let (s2, stdout2, _) = did_cmd_env(root, &["status"], &[("DID_STATUS_PATH", "auth")]);
-    assert!(s2);
-    assert!(stdout2.contains("auth/jwt.md"));
-
-    // 3. DID_LOG_PATH
-    let log_file = root.join("execution.log");
-    let (s3, _, _) = did_cmd_env(root, &["status"], &[("DID_LOG_PATH", log_file.to_str().unwrap())]);
-    assert!(s3);
-    assert!(log_file.is_file());
-
-    // 4. DID_DEBUG
-    let (s4, _, _stderr4) = did_cmd_env(root, &["status"], &[("DID_DEBUG", "1")]);
-    assert!(s4);
-
-    // 5. DID_COLOR & 6. DID_NO_COLOR
-    let (s5, stdout5, _) = did_cmd_env(root, &["show", "auth/jwt.md"], &[("FORCE_COLOR", "1"), ("DID_COLOR", "1")]);
-    assert!(s5);
-    assert!(stdout5.contains("\x1b[")); // ANSI colors active
-
-    let (s6, stdout6, _) = did_cmd_env(root, &["show", "auth/jwt.md"], &[("FORCE_COLOR", "1"), ("DID_NO_COLOR", "1")]);
-    assert!(s6);
-    assert!(!stdout6.contains("\x1b[31m")); // Color opted out
-
-    // 7. DID_BOX & 8. DID_NO_BOX
-    let (s7, _, stderr7) = did_cmd_env(root, &["show", "auth/jwt.md"], &[("FORCE_COLOR", "1"), ("DID_BOX", "1")]);
-    assert!(s7);
-    assert!(stderr7.contains("╭─")); // Box enabled for hook
-
-    let (s8, _, stderr8) = did_cmd_env(root, &["show", "auth/jwt.md"], &[("FORCE_COLOR", "1"), ("DID_NO_BOX", "1")]);
-    assert!(s8);
-    assert!(!stderr8.contains("╭─")); // Box disabled
-
-    // 9. DID_THEME & DID_SYNTAX_THEME
-    for theme in &["light", "github", "solarized", "dark"] {
-        let (st, stdout_t, _) = did_cmd_env(root, &["show", "auth/jwt.md"], &[("FORCE_COLOR", "1"), ("DID_THEME", theme)]);
-        assert!(st);
-        assert!(!stdout_t.is_empty());
-    }
-
-    // 10. DID_RELATED_LIMIT
-    let (s10, _, stderr10) = did_cmd_env(root, &["show", "auth/jwt.md"], &[("FORCE_COLOR", "1"), ("DID_RELATED_LIMIT", "1")]);
-    assert!(s10);
-    assert!(stderr10.contains("Related"));
-    assert!(stderr10.contains("auth/session.md"));
-
-    // 11. Hook Env Vars
-    let (shook, _, stderrhook) = did_cmd(root, &["show", "auth/jwt.md"]);
-    assert!(shook);
-    assert!(stderrhook.contains("EVENT=show"));
-    assert!(stderrhook.contains("TARGET=auth/jwt.md"));
-    assert!(stderrhook.contains("REPO="));
-    assert!(stderrhook.contains("STATE="));
 }
 
 #[test]
@@ -1657,4 +1453,42 @@ fn test_did_log_subcommand() {
     let (s_help, stdout_help, _) = did_cmd(root, &["help", "log"]);
     assert!(s_help);
     assert!(stdout_help.contains("View task Git history and lifecycle events"));
+}
+
+#[test]
+fn test_did_log_edge_cases() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    let status_git = Command::new("git")
+        .args(["init"])
+        .current_dir(root)
+        .status()
+        .expect("git init failed");
+    assert!(status_git.success());
+
+    Command::new("git").args(["config", "user.name", "Test User"]).current_dir(root).status().unwrap();
+    Command::new("git").args(["config", "user.email", "test@example.com"]).current_dir(root).status().unwrap();
+
+    did_cmd(root, &["add", "task.md", "-m", "Task"]);
+    Command::new("git").args(["add", "."]).current_dir(root).status().unwrap();
+    Command::new("git").args(["commit", "-m", "Initial task"]).current_dir(root).status().unwrap();
+
+    // Test log with --until date filter
+    let (s_until, stdout_until, stderr_until) = did_cmd(root, &["log", "--until", "2020-01-01"]);
+    assert!(s_until);
+    assert!(stderr_until.contains("did log: 0 events"));
+    assert_eq!(stdout_until.trim(), "");
+
+    // Test log --json with zero events
+    let (s_json_empty, stdout_json_empty, stderr_json_empty) = did_cmd(root, &["log", "--json", "--until", "2020-01-01"]);
+    assert!(s_json_empty);
+    assert!(stderr_json_empty.contains("did log: 0 events"));
+    assert_eq!(stdout_json_empty.trim(), "[]");
+
+    // Test log on non-existent file path
+    let (s_nonexist, stdout_nonexist, stderr_nonexist) = did_cmd(root, &["log", "non_existent_file.md"]);
+    assert!(s_nonexist);
+    assert!(stderr_nonexist.contains("did log: 0 events"));
+    assert_eq!(stdout_nonexist.trim(), "");
 }

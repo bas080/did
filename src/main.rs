@@ -1,6 +1,5 @@
 mod cli;
 mod commands;
-mod renderer;
 mod repo;
 
 use clap::{CommandFactory, FromArgMatches};
@@ -129,4 +128,23 @@ fn escape_xml(s: &str) -> String {
         .replace('>', "&gt;")
         .replace('"', "&quot;")
         .replace('\'', "&apos;")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_escape_xml() {
+        assert_eq!(
+            escape_xml("a & b < c > d \" e ' f"),
+            "a &amp; b &lt; c &gt; d &quot; e &apos; f"
+        );
+    }
+
+    #[test]
+    fn test_log_execution_branches() {
+        log_execution(None, "status", &["status".to_string()], ExitCode::SUCCESS);
+        log_execution(None, "status", &["status".to_string()], ExitCode::FAILURE);
+    }
 }

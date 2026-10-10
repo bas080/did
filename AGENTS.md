@@ -15,8 +15,7 @@ Welcome! This repository uses `did`, a filesystem-native task and dependency tra
    ```bash
    did help
    ```
-4. **Visual Output Verification & Aesthetic Perfection**: Any change to the visual output of the CLI MUST be visually inspected across every component and every aspect of those components to make sure it is just right. You MUST test the view variations by providing relevant flags (e.g. `--tree`, `--blocked`, `-a`), obsessing over visual polish, and iterating until the output formatting and colors are clean and perfect.
-5. **Work Completion Verification**: Work is ONLY considered done if `did test` executes cleanly and exits zero with no health violations:
+4. **Work Completion Verification**: Work is ONLY considered done if `did test` executes cleanly and exits zero with no health violations:
    ```bash
    did test
    ```

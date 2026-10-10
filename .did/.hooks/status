@@ -1,4 +1,1 @@
-# Status Listing
-
-- Print a nested directory tree view: `did status --tree`
-- Target a specific subdirectory: `did status <PATH>`
+# Status Listing (`.did/.hooks/status`)

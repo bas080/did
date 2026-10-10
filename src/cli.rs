@@ -30,18 +30,9 @@ pub enum Commands {
     },
 
     /// List actionables (leaf nodes with all sub-items done)
-    #[command(alias = "list")]
     Status {
         /// Optional subtree path
         path: Option<PathBuf>,
-
-        /// Display tasks in a tree structure
-        #[arg(short = 't', long = "tree")]
-        tree: bool,
-
-        /// List blocked tasks
-        #[arg(short = 'b', long = "blocked")]
-        blocked: bool,
     },
 
     /// Search task paths and task file contents for QUERY
@@ -52,14 +43,6 @@ pub enum Commands {
 
         /// Optional subtree path
         path: Option<PathBuf>,
-
-        /// Print 1-based line numbers for matching content snippets
-        #[arg(short = 'n', long = "line-number")]
-        line_number: bool,
-
-        /// Display search results in a tree structure
-        #[arg(short = 't', long = "tree")]
-        tree: bool,
     },
 
     /// Print task contents at PATH (requires sub-items done unless -a)
@@ -69,8 +52,7 @@ pub enum Commands {
     },
 
     /// Mark PATH as resolved (hides it; fails if sub-items remain open)
-    #[command(alias = "done")]
-    Close {
+    Done {
         /// Task file path or directory
         path: PathBuf,
 
@@ -80,19 +62,14 @@ pub enum Commands {
     },
 
     /// Mark a resolved PATH as open/undone (removes leading dot; updates symlinks)
-    #[command(alias = "undone")]
-    Open {
-        /// Resolved task file path or directory
+    Undone {
+        /// Resolved task file path
         path: PathBuf,
-
-        /// Reopen all resolved tasks inside directory recursively
-        #[arg(short = 'r', long = "recursive")]
-        recursive: bool,
     },
 
     /// Symlink TARGET into DEST directory using TARGET's basename
-    #[command(alias = "link", alias = "ln")]
-    Blocks {
+    #[command(alias = "ln")]
+    Link {
         /// Target path
         target: PathBuf,
         /// Destination directory path

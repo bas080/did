@@ -2,16 +2,76 @@
 
 `did` is a lightweight, filesystem-native issue tracker that uses directory structures, relative symlinks, and event-driven lifecycle hooks to build programmable, local software factories and development workflows.
 
-All issues live in `.did/` as Markdown files, making state transparent and fully version-controlled with Git.
+## Goal
+
+The primary goal of `did` is to provide a local, git-versioned issue tracking system where directory structures define workflows (e.g., `.did/refine/`, `.did/implement/`) and executable lifecycle hooks (`.hooks/`) automate quality gates, guidelines, and execution pipelines directly inside the repository.
+
+By treating issues as files and directory paths as states, `did` allows developers and autonomous AI agents to build self-testing, self-guided local software factories.
 
 ## Key Features
 
-- **Filesystem State**: All tasks live in `.did/` as Markdown files.
-- **Lifecycle Hooks**: Define custom hooks in `.hooks/` (e.g. `test`, `show`, `status`, `add`, `close`, `open`, `mv`, `blocks`, `rm`, `help`) to enforce rules and automate workflows.
-- **Prerequisites & Dependencies**: Use `did blocks` to express dependencies between sub-tasks across directories.
+- **Filesystem State**: All issues and tasks live in `.did/` as Markdown or text files, making state transparent and fully version-controlled with Git.
+- **Lifecycle Hooks**: Define custom hooks in `.hooks/` (such as `test`, `show`, `status`, `add`, `done`, `mv`, `link`, `rm`, `help`) to enforce rules, trigger checks, or display contextual guidance.
+- **Software Factory Automation**: Intercept CLI operations with executable hooks to automate stage transitions, enforce quality constraints, or collect telemetry.
+- **Dependency Symlinks**: Use symlinks (`did link`) to express prerequisite dependencies between sub-tasks across directories.
 - **Actionable Tracking**: `did status` identifies actionable leaf tasks whose sub-items/dependencies are resolved.
+- **Execution Telemetry**: Structured XML logging (`DID_LOG_PATH`) for tracking command invocations across automated pipeline runs.
 
-For advanced documentation, hook specifications, and environment variable references, see [ADVANCED.md](ADVANCED.md).
+## Software Factories & Lifecycle Hooks
+
+In `did`, any directory in `.did/` can contain a `.hooks/` directory with hook scripts named after CLI subcommands (`add`, `show`, `status`, `done`, `test`, `link`, `mv`, `rm`, `query`, `help`).
+
+When a `did` subcommand executes:
+1. **Hook Discovery**: `did` traverses from the target path up to `.did/` looking for matching `.hooks/<cmd>` files.
+2. **Hook Execution**: If executable, hooks run before the subcommand completes, receiving context via environment variables (`DID_EVENT`, `DID_TARGET`, `DID_DEST`, `DID_OLD`, `DID_NEW`, `DID_REPO_ROOT`, `DID_STATE_DIR`).
+3. **Quality Gates**: If a hook exits with a non-zero exit code, `did` aborts the operation.
+
+### Supported Lifecycle Hooks
+
+| Hook | CLI Trigger | Description |
+| :--- | :--- | :--- |
+| `add` | `did add <PATH>` | Executed during task creation before creating file. |
+| `show` | `did show <PATH>` | Executed during task display to output guidelines or context. |
+| `status` | `did status [PATH]` | Executed before status listing. |
+| `done` | `did done <PATH>` | Executed before resolving a task. |
+| `link` | `did link <TARGET> <DEST>` | Executed before symlink creation. |
+| `mv` | `did mv <OLD> <NEW>` | Executed before moving or renaming tasks. |
+| `rm` | `did rm <PATH>` | Executed before deleting task files or directories. |
+| `query` | `did query <QUERY>` | Executed before searching tasks and content. |
+| `test` | `did test` | Executed during repository health check. |
+| `help` | `did help [TOPIC]` | Executed when invoking help or running without subcommands to display way-of-working instructions. |
+
+This allows defining local factory workflows—for example, requiring issue refinement tagging before moving issues to `implement/`, enforcing unit tests when running `did test`, or outputting way-of-working instructions when running `did help`.
+
+## Installation
+
+### Direct Binary Download (Linux x86_64)
+
+To install the **latest release**:
+```bash
+curl -sL -o did https://github.com/bas080/did/releases/download/latest/did-linux-x86_64
+chmod +x did
+sudo mv did /usr/local/bin/
+did --help
+```
+
+To install the **latest development build**:
+```bash
+curl -sL -o did https://github.com/bas080/did/releases/download/development/did-linux-x86_64
+chmod +x did
+sudo mv did /usr/local/bin/
+did --help
+```
+
+### Build from Source (Cargo)
+
+Ensure you have Rust installed (1.80+), then build with Cargo:
+
+```bash
+cargo build --release
+```
+
+The compiled binary will be placed at `target/release/did`.
 
 ## Quick Start
 
@@ -24,10 +84,10 @@ did add refine/auth/jwt.md -m "Implement JWT token validation"
 did add refine/ui/login.md
 ```
 
-### 2. Block Sub-Tasks
+### 2. Link Dependencies
 ```bash
-# Mark a task as a prerequisite for another directory
-did blocks refine/auth/jwt.md refine/ui
+# Link a task into another directory as a dependency (prerequisite)
+did link refine/auth/jwt.md refine/ui
 ```
 
 ### 3. Move Issues Across Workflow Stages
@@ -38,54 +98,54 @@ did mv refine/auth/jwt.md implement/auth/jwt.md
 
 ### 4. Check Status
 ```bash
-# List actionable issues
+# List actionable issues (unblocked leaf tasks)
 did status
 
-# Display directory tree view
-did status --tree
-
-# List blocked tasks
-did status -b
+# List all issues including blocked and completed tasks
+did status -a
 ```
 
-### 5. Inspect & Resolve Issues
-```bash
-# Inspect issue content
-did show implement/auth/jwt.md
-
-# Mark task closed (dot-prefixes filename)
-did close implement/auth/jwt.md
-
-# Reopen task
-did open implement/auth/jwt.md
-```
-
-### 6. Validate Repository Health
+### 5. Validate Repository Health
 ```bash
 # Runs sanity checks and executes .did/.hooks/test lifecycle hook
 did test
 ```
 
-## Installation
-
-### Direct Binary Download (Linux x86_64)
-
+### 6. Inspect & Resolve Issues
 ```bash
-curl -sL -o did https://github.com/bas080/did/releases/download/latest/did-linux-x86_64
-chmod +x did
-sudo mv did /usr/local/bin/
-did --help
+# Inspect issue content
+did show implement/auth/jwt.md
+
+# Mark task resolved (dot-prefixes filename and updates symlinks)
+did done implement/auth/jwt.md
+
+# Reopen task
+did undone implement/auth/jwt.md
 ```
 
-### Build from Source (Cargo)
+## Environment Variables
 
-```bash
-cargo build --release
-```
+| Variable | Description |
+| :--- | :--- |
+| `DID_STATUS_PATH` | Specifies a default subtree path under `.did/` when running `did status` without an explicit path argument. |
+| `DID_STATUS_LIMIT` | Sets the maximum number of items returned by `did status` or `did query` before displaying a truncation notice on `stderr`. |
+| `DID_LOG_PATH` | Activates XML execution telemetry logging. Relative paths are resolved relative to the parent directory where `.did/` lives. |
+| `DID_DEBUG` | Enables verbose diagnostic logging on `stderr`. |
+| `EDITOR` | Specifies the text editor to invoke when running `did add PATH` without a `-m` message flag (defaults to `vi`). |
 
-## Documentation
+## Recipes
 
-For full details on lifecycle hooks, environment variables, state cache proposals, and telemetry logging, see [ADVANCED.md](ADVANCED.md).
+## Recipes
+
+### Automating Quality Gates with Git Hooks
+You can integrate `did` into your Git workflow to enforce quality gates (like running `did test`) before every commit.
+
+1. Create a `.githooks/pre-commit` script that calls `did test`.
+2. Configure your local repository to use this directory:
+   ```bash
+   git config core.hooksPath .githooks
+   ```
+Now, any commit attempt that violates your `did` health checks will be automatically blocked.
 
 ## License
 
