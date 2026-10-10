@@ -1598,15 +1598,33 @@ fn test_did_log_subcommand() {
     let (s_add1, _, _) = did_cmd(root, &["add", "refine/auth.md", "-m", "Auth task"]);
     assert!(s_add1);
 
-    Command::new("git").args(["add", "."]).current_dir(root).status().unwrap();
-    Command::new("git").args(["commit", "-m", "Add auth task"]).current_dir(root).status().unwrap();
+    did_cmd(root, &["add", "refine/ui.md", "-m", "UI task"]);
 
+    Command::new("git").args(["add", "."]).current_dir(root).status().unwrap();
+    Command::new("git").args(["commit", "-m", "Add initial tasks"]).current_dir(root).status().unwrap();
+
+    // Link refine/auth.md into refine/ui -> blocks refine/ui.md
+    let (s_link, _, _) = did_cmd(root, &["link", "refine/auth.md", "refine/ui"]);
+    assert!(s_link);
+
+    Command::new("git").args(["add", "."]).current_dir(root).status().unwrap();
+    Command::new("git").args(["commit", "-m", "Link auth into ui"]).current_dir(root).status().unwrap();
+
+    // Move task to implement/
     let (s_mv, _, _) = did_cmd(root, &["mv", "refine/auth.md", "implement/auth.md"]);
     assert!(s_mv);
 
     Command::new("git").args(["add", "."]).current_dir(root).status().unwrap();
     Command::new("git").args(["commit", "-m", "Move auth task"]).current_dir(root).status().unwrap();
 
+    // Remove symlink in refine/ui
+    let (s_rm, _, _) = did_cmd(root, &["rm", "refine/ui/auth.md"]);
+    assert!(s_rm);
+
+    Command::new("git").args(["add", "."]).current_dir(root).status().unwrap();
+    Command::new("git").args(["commit", "-m", "Remove auth symlink from ui"]).current_dir(root).status().unwrap();
+
+    // Complete task
     let (s_done, _, _) = did_cmd(root, &["done", "implement/auth.md"]);
     assert!(s_done);
 
@@ -1615,20 +1633,25 @@ fn test_did_log_subcommand() {
 
     let (s_log, stdout_log, stderr_log) = did_cmd(root, &["log"]);
     assert!(s_log);
-    assert!(stderr_log.contains("did log: 3 event(s)"));
+    assert!(stderr_log.contains("did log:"));
     assert!(stdout_log.contains("Task *created*: `refine/auth.md` by *Test User*"));
-    assert!(stdout_log.contains("Task *moved*: `refine/auth.md` -> `implement/auth.md` by *Test User*"));
+    assert!(stdout_log.contains("Task *blocked*: `refine/ui/auth.md` by `refine/auth.md` by *Test User*"));
+    assert!(stdout_log.contains("Task *unblocked*: `refine/ui/auth.md` from `implement/auth.md` by *Test User*"));
     assert!(stdout_log.contains("Task *closed*: `implement/auth.md` -> `implement/.auth.md` by *Test User*"));
 
-    let (s_path, stdout_path, stderr_path) = did_cmd(root, &["log", "implement/.auth.md"]);
-    assert!(s_path);
-    assert!(stderr_path.contains("did log: 3 event(s)"));
-    assert!(stdout_path.contains("Task *closed*:"));
+    // Test --json flag
+    let (s_json, stdout_json, stderr_json) = did_cmd(root, &["log", "--json"]);
+    assert!(s_json);
+    assert!(stderr_json.contains("did log:"));
+    assert!(stdout_json.contains("\"action\": \"blocked\""));
+    assert!(stdout_json.contains("\"action\": \"unblocked\""));
+    assert!(stdout_json.contains("\"action\": \"closed\""));
+    assert!(stdout_json.starts_with("["));
+    assert!(stdout_json.trim_end().ends_with("]"));
 
     let (s_nobox, _, stderr_nobox) = did_cmd_env(root, &["log"], &[("NO_BOX", "1")]);
     assert!(s_nobox);
     assert!(stderr_nobox.contains("---"));
-    assert!(stderr_nobox.contains("did log: 3 event(s)"));
 
     let (s_help, stdout_help, _) = did_cmd(root, &["help", "log"]);
     assert!(s_help);

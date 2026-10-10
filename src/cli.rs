@@ -131,6 +131,10 @@ pub enum Commands {
         /// Show events until specified date/time
         #[arg(long)]
         until: Option<String>,
+
+        /// Output log entries as structured JSON array
+        #[arg(long)]
+        json: bool,
     },
 
     /// Validate repository health and structure

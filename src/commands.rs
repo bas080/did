@@ -111,12 +111,17 @@ pub fn run(repo_opt: Option<Repo>, command: Commands, global_all: bool) -> ExitC
             };
             cmd_show(&repo, &path, global_all)
         }
-        Commands::Log { path, since, until } => {
+        Commands::Log {
+            path,
+            since,
+            until,
+            json,
+        } => {
             let repo = match require_repo(repo_opt) {
                 Ok(r) => r,
                 Err(code) => return code,
             };
-            cmd_log(&repo, path, since, until)
+            cmd_log(&repo, path, since, until, json)
         }
         Commands::Close { path, recursive } => {
             let repo = match require_repo(repo_opt) {
@@ -1968,6 +1973,7 @@ pub fn cmd_log(
     raw_path: Option<PathBuf>,
     since: Option<String>,
     until: Option<String>,
+    json: bool,
 ) -> ExitCode {
     if !is_git_installed() {
         eprintln!("error: git is required for 'did log' but was not found in PATH.");
@@ -1993,7 +1999,7 @@ pub fn cmd_log(
     git_cmd
         .arg("log")
         .arg("-M")
-        .arg("--name-status")
+        .arg("--raw")
         .arg("--pretty=format:COMMIT:%h|%an|%ad")
         .arg("--date=short");
 
@@ -2027,9 +2033,12 @@ pub fn cmd_log(
     }
 
     let stdout_str = String::from_utf8_lossy(&output.stdout);
-    let events = parse_git_log_output(&stdout_str, repo);
+    let events = parse_git_log_output(&stdout_str, repo_root);
 
     if events.is_empty() {
+        if json {
+            println!("[]");
+        }
         print_boxed_stderr("did log: 0 events");
         return ExitCode::SUCCESS;
     }
@@ -2050,8 +2059,17 @@ pub fn cmd_log(
 
     print_boxed_stderr(&summary_msg);
 
-    for ev in &events {
-        println!("{}", ev.to_markdown());
+    if json {
+        println!("[");
+        for (i, ev) in events.iter().enumerate() {
+            let comma = if i + 1 < events.len() { "," } else { "" };
+            println!("  {}{}", ev.to_json(), comma);
+        }
+        println!("]");
+    } else {
+        for ev in &events {
+            println!("{}", ev.to_markdown());
+        }
     }
 
     ExitCode::SUCCESS
@@ -2070,6 +2088,8 @@ enum LogAction {
     Reopened { old: String, new: String },
     Deleted(String),
     Modified(String),
+    Blocked { path: String, target: String },
+    Unblocked { path: String, target: String },
 }
 
 struct LogEvent {
@@ -2106,8 +2126,72 @@ impl LogEvent {
                 "- **{}** Task *modified*: `{}` by *{}* on `{}`",
                 self.hash, p, self.author, self.date
             ),
+            LogAction::Blocked { path, target } => format!(
+                "- **{}** Task *blocked*: `{}` by `{}` by *{}* on `{}`",
+                self.hash, path, target, self.author, self.date
+            ),
+            LogAction::Unblocked { path, target } => format!(
+                "- **{}** Task *unblocked*: `{}` from `{}` by *{}* on `{}`",
+                self.hash, path, target, self.author, self.date
+            ),
         }
     }
+
+    fn to_json(&self) -> String {
+        let h = escape_json(&self.hash);
+        let a = escape_json(&self.author);
+        let d = escape_json(&self.date);
+
+        match &self.action {
+            LogAction::Created(p) => format!(
+                "{{\"hash\": \"{}\", \"action\": \"created\", \"path\": \"{}\", \"author\": \"{}\", \"date\": \"{}\"}}",
+                h, escape_json(p), a, d
+            ),
+            LogAction::Moved { old, new } => format!(
+                "{{\"hash\": \"{}\", \"action\": \"moved\", \"old_path\": \"{}\", \"new_path\": \"{}\", \"author\": \"{}\", \"date\": \"{}\"}}",
+                h, escape_json(old), escape_json(new), a, d
+            ),
+            LogAction::Closed { old, new } => format!(
+                "{{\"hash\": \"{}\", \"action\": \"closed\", \"old_path\": \"{}\", \"new_path\": \"{}\", \"author\": \"{}\", \"date\": \"{}\"}}",
+                h, escape_json(old), escape_json(new), a, d
+            ),
+            LogAction::Reopened { old, new } => format!(
+                "{{\"hash\": \"{}\", \"action\": \"reopened\", \"old_path\": \"{}\", \"new_path\": \"{}\", \"author\": \"{}\", \"date\": \"{}\"}}",
+                h, escape_json(old), escape_json(new), a, d
+            ),
+            LogAction::Deleted(p) => format!(
+                "{{\"hash\": \"{}\", \"action\": \"deleted\", \"path\": \"{}\", \"author\": \"{}\", \"date\": \"{}\"}}",
+                h, escape_json(p), a, d
+            ),
+            LogAction::Modified(p) => format!(
+                "{{\"hash\": \"{}\", \"action\": \"modified\", \"path\": \"{}\", \"author\": \"{}\", \"date\": \"{}\"}}",
+                h, escape_json(p), a, d
+            ),
+            LogAction::Blocked { path, target } => format!(
+                "{{\"hash\": \"{}\", \"action\": \"blocked\", \"path\": \"{}\", \"target\": \"{}\", \"author\": \"{}\", \"date\": \"{}\"}}",
+                h, escape_json(path), escape_json(target), a, d
+            ),
+            LogAction::Unblocked { path, target } => format!(
+                "{{\"hash\": \"{}\", \"action\": \"unblocked\", \"path\": \"{}\", \"target\": \"{}\", \"author\": \"{}\", \"date\": \"{}\"}}",
+                h, escape_json(path), escape_json(target), a, d
+            ),
+        }
+    }
+}
+
+fn escape_json(s: &str) -> String {
+    let mut out = String::new();
+    for c in s.chars() {
+        match c {
+            '\\' => out.push_str("\\\\"),
+            '"' => out.push_str("\\\""),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c => out.push(c),
+        }
+    }
+    out
 }
 
 fn clean_task_path(git_path: &str) -> String {
@@ -2135,7 +2219,32 @@ fn is_ignorable_path(git_path: &str) -> bool {
     false
 }
 
-fn parse_git_log_output(output: &str, _repo: &Repo) -> Vec<LogEvent> {
+fn resolve_symlink_target(_repo_root: &Path, git_symlink_path: &str, target_rel_str: &str) -> String {
+    let sym_p = Path::new(git_symlink_path);
+    if let Some(parent) = sym_p.parent() {
+        let joined = normalize_path(&parent.join(target_rel_str));
+        return clean_task_path(&joined.to_string_lossy());
+    }
+    clean_task_path(target_rel_str)
+}
+
+fn get_git_blob_content(repo_root: &Path, blob_hash: &str) -> Option<String> {
+    if blob_hash.chars().all(|c| c == '0') || blob_hash.is_empty() {
+        return None;
+    }
+    let output = Command::new("git")
+        .args(["cat-file", "-p", blob_hash])
+        .current_dir(repo_root)
+        .output()
+        .ok()?;
+    if output.status.success() {
+        Some(String::from_utf8_lossy(&output.stdout).trim().to_string())
+    } else {
+        None
+    }
+}
+
+fn parse_git_log_output(output: &str, repo_root: &Path) -> Vec<LogEvent> {
     let mut events = Vec::new();
     let mut current_commit: Option<LogCommit> = None;
 
@@ -2154,50 +2263,122 @@ fn parse_git_log_output(output: &str, _repo: &Repo) -> Vec<LogEvent> {
                     date: parts[2].to_string(),
                 });
             }
-        } else if let Some(commit) = &current_commit {
-            let parts: Vec<&str> = trimmed.split('\t').collect();
-            if parts.is_empty() {
-                continue;
-            }
+        } else if trimmed.starts_with(':') {
+            if let Some(commit) = &current_commit {
+                let parts: Vec<&str> = trimmed.split('\t').collect();
+                if parts.is_empty() {
+                    continue;
+                }
 
-            let status = parts[0];
+                let meta_tokens: Vec<&str> = parts[0].split_whitespace().collect();
+                if meta_tokens.len() < 5 {
+                    continue;
+                }
 
-            if status.starts_with('R') || status.starts_with('C') {
-                if parts.len() >= 3 {
-                    let old_raw = parts[1];
-                    let new_raw = parts[2];
+                let mode_before = meta_tokens[0].trim_start_matches(':');
+                let mode_after = meta_tokens[1];
+                let hash_before = meta_tokens[2];
+                let hash_after = meta_tokens[3];
+                let status = meta_tokens[4];
 
-                    if is_ignorable_path(old_raw) && is_ignorable_path(new_raw) {
+                let is_symlink_after = mode_after == "120000";
+                let is_symlink_before = mode_before == "120000";
+
+                if is_symlink_after || is_symlink_before {
+                    let file_raw = parts.get(1).copied().unwrap_or("");
+                    if is_ignorable_path(file_raw) {
                         continue;
                     }
 
-                    let old_clean = clean_task_path(old_raw);
-                    let new_clean = clean_task_path(new_raw);
+                    let clean_path = clean_task_path(file_raw);
 
-                    let old_filename = Path::new(&old_clean)
-                        .file_name()
-                        .map(|s| s.to_string_lossy())
-                        .unwrap_or_default();
-                    let new_filename = Path::new(&new_clean)
-                        .file_name()
-                        .map(|s| s.to_string_lossy())
-                        .unwrap_or_default();
+                    if is_symlink_after {
+                        let target_str = get_git_blob_content(repo_root, hash_after)
+                            .unwrap_or_default();
+                        let target_clean = resolve_symlink_target(repo_root, file_raw, &target_str);
 
-                    let action = if !old_filename.starts_with('.') && new_filename.starts_with('.') {
-                        LogAction::Closed {
-                            old: old_clean,
-                            new: new_clean,
-                        }
-                    } else if old_filename.starts_with('.') && !new_filename.starts_with('.') {
-                        LogAction::Reopened {
-                            old: old_clean,
-                            new: new_clean,
-                        }
+                        events.push(LogEvent {
+                            hash: commit.hash.clone(),
+                            author: commit.author.clone(),
+                            date: commit.date.clone(),
+                            action: LogAction::Blocked {
+                                path: clean_path,
+                                target: target_clean,
+                            },
+                        });
                     } else {
-                        LogAction::Moved {
-                            old: old_clean,
-                            new: new_clean,
+                        let target_str = get_git_blob_content(repo_root, hash_before)
+                            .unwrap_or_default();
+                        let target_clean = resolve_symlink_target(repo_root, file_raw, &target_str);
+
+                        events.push(LogEvent {
+                            hash: commit.hash.clone(),
+                            author: commit.author.clone(),
+                            date: commit.date.clone(),
+                            action: LogAction::Unblocked {
+                                path: clean_path,
+                                target: target_clean,
+                            },
+                        });
+                    }
+                } else if status.starts_with('R') || status.starts_with('C') {
+                    if parts.len() >= 3 {
+                        let old_raw = parts[1];
+                        let new_raw = parts[2];
+
+                        if is_ignorable_path(old_raw) && is_ignorable_path(new_raw) {
+                            continue;
                         }
+
+                        let old_clean = clean_task_path(old_raw);
+                        let new_clean = clean_task_path(new_raw);
+
+                        let old_filename = Path::new(&old_clean)
+                            .file_name()
+                            .map(|s| s.to_string_lossy())
+                            .unwrap_or_default();
+                        let new_filename = Path::new(&new_clean)
+                            .file_name()
+                            .map(|s| s.to_string_lossy())
+                            .unwrap_or_default();
+
+                        let action = if !old_filename.starts_with('.') && new_filename.starts_with('.') {
+                            LogAction::Closed {
+                                old: old_clean,
+                                new: new_clean,
+                            }
+                        } else if old_filename.starts_with('.') && !new_filename.starts_with('.') {
+                            LogAction::Reopened {
+                                old: old_clean,
+                                new: new_clean,
+                            }
+                        } else {
+                            LogAction::Moved {
+                                old: old_clean,
+                                new: new_clean,
+                            }
+                        };
+
+                        events.push(LogEvent {
+                            hash: commit.hash.clone(),
+                            author: commit.author.clone(),
+                            date: commit.date.clone(),
+                            action,
+                        });
+                    }
+                } else if parts.len() >= 2 {
+                    let file_raw = parts[1];
+                    if is_ignorable_path(file_raw) {
+                        continue;
+                    }
+
+                    let clean = clean_task_path(file_raw);
+                    let action = if status.starts_with('A') {
+                        LogAction::Created(clean)
+                    } else if status.starts_with('D') {
+                        LogAction::Deleted(clean)
+                    } else {
+                        LogAction::Modified(clean)
                     };
 
                     events.push(LogEvent {
@@ -2207,27 +2388,6 @@ fn parse_git_log_output(output: &str, _repo: &Repo) -> Vec<LogEvent> {
                         action,
                     });
                 }
-            } else if parts.len() >= 2 {
-                let file_raw = parts[1];
-                if is_ignorable_path(file_raw) {
-                    continue;
-                }
-
-                let clean = clean_task_path(file_raw);
-                let action = if status.starts_with('A') {
-                    LogAction::Created(clean)
-                } else if status.starts_with('D') {
-                    LogAction::Deleted(clean)
-                } else {
-                    LogAction::Modified(clean)
-                };
-
-                events.push(LogEvent {
-                    hash: commit.hash.clone(),
-                    author: commit.author.clone(),
-                    date: commit.date.clone(),
-                    action,
-                });
             }
         }
     }

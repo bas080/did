@@ -4,12 +4,33 @@
 Implement a `did log` subcommand that queries Git history to present a chronologically ordered, markdown-formatted log of task events across the `.did/` state directory (or a specific task path).
 
 ## Requirements
-1. Subcommand syntax: `did log [PATH] [--since <SINCE>] [--until <UNTIL>]`.
+1. Subcommand syntax: `did log [PATH] [--since <SINCE>] [--until <UNTIL>] [--json]`.
 2. Hides from main CLI help list if `git` executable is missing from `PATH`. `did help log` remains accessible.
 3. Outputs aggregate summary box on `stderr`.
-4. Outputs styled Markdown event list on `stdout`.
+4. Outputs styled Markdown event list on `stdout` by default, or JSON array when `--json` is supplied.
+5. Tracks symlink dependency changes: symlink creations logged as `Task *blocked*: <path> by <target>`, symlink removals logged as `Task *unblocked*: <path> from <target>`.
 
 ## Output Examples
+```
+$ did log --json
+[
+  {
+    "hash": "a1b2c3d",
+    "action": "created",
+    "path": "refine/auth.md",
+    "author": "Alice",
+    "date": "2025-03-01"
+  },
+  {
+    "hash": "b2c3d4e",
+    "action": "blocked",
+    "path": "refine/ui.md",
+    "target": "refine/auth.md",
+    "author": "Alice",
+    "date": "2025-03-02"
+  }
+]
+```
 
 ### Before
 ```
