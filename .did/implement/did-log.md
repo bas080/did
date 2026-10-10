@@ -43,7 +43,8 @@ error: unrecognized subcommand 'log'
 $ did log
 --- stderr ---
 ┌──────────────────────────────────────────────────┐
-│ did log: 3 events (2025-03-01 to 2025-03-08)     │
+│ did log: 3 event(s) (2025-03-01 to 2025-03-08)  │
+│ Breakdown: 1 created, 1 moved, 1 closed          │
 └──────────────────────────────────────────────────┘
 --- stdout ---
 - **a1b2c3d** Task *created*: `refine/auth.md` by *Alice* on `2025-03-01`

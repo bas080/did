@@ -1634,6 +1634,7 @@ fn test_did_log_subcommand() {
     let (s_log, stdout_log, stderr_log) = did_cmd(root, &["log"]);
     assert!(s_log);
     assert!(stderr_log.contains("did log:"));
+    assert!(stderr_log.contains("Breakdown:"));
     assert!(stdout_log.contains("Task *created*: `refine/auth.md` by *Test User*"));
     assert!(stdout_log.contains("Task *blocked*: `refine/ui/auth.md` by `refine/auth.md` by *Test User*"));
     assert!(stdout_log.contains("Task *unblocked*: `refine/ui/auth.md` from `implement/auth.md` by *Test User*"));

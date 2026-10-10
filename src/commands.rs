@@ -1954,16 +1954,24 @@ fn is_box_enabled() -> bool {
     true
 }
 
-fn print_boxed_stderr(message: &str) {
+fn print_boxed_stderr_lines(lines: &[String]) {
+    if lines.is_empty() {
+        return;
+    }
     if is_box_enabled() {
-        let len = message.chars().count();
-        let border = "─".repeat(len + 2);
+        let max_len = lines.iter().map(|l| l.chars().count()).max().unwrap_or(0);
+        let border = "─".repeat(max_len + 2);
         eprintln!("┌{}┐", border);
-        eprintln!("│ {} │", message);
+        for line in lines {
+            let padding = " ".repeat(max_len.saturating_sub(line.chars().count()));
+            eprintln!("│ {}{} │", line, padding);
+        }
         eprintln!("└{}┘", border);
     } else {
         eprintln!("---");
-        eprintln!("{}", message);
+        for line in lines {
+            eprintln!("{}", line);
+        }
         eprintln!("---");
     }
 }
@@ -2039,15 +2047,41 @@ pub fn cmd_log(
         if json {
             println!("[]");
         }
-        print_boxed_stderr("did log: 0 events");
+        print_boxed_stderr_lines(&[ "did log: 0 events".to_string() ]);
         return ExitCode::SUCCESS;
+    }
+
+    let mut created_cnt = 0;
+    let mut moved_cnt = 0;
+    let mut closed_cnt = 0;
+    let mut reopened_cnt = 0;
+    let mut blocked_cnt = 0;
+    let mut unblocked_cnt = 0;
+    let mut deleted_cnt = 0;
+    let mut modified_cnt = 0;
+
+    for ev in &events {
+        match &ev.action {
+            LogAction::Created(_) => created_cnt += 1,
+            LogAction::Moved { .. } => moved_cnt += 1,
+            LogAction::Closed { .. } => closed_cnt += 1,
+            LogAction::Reopened { .. } => reopened_cnt += 1,
+            LogAction::Blocked { .. } => blocked_cnt += 1,
+            LogAction::Unblocked { .. } => unblocked_cnt += 1,
+            LogAction::Deleted(_) => deleted_cnt += 1,
+            LogAction::Modified(_) => modified_cnt += 1,
+        }
     }
 
     let latest_date = events.first().map(|e| e.date.as_str()).unwrap_or("");
     let earliest_date = events.last().map(|e| e.date.as_str()).unwrap_or("");
 
-    let summary_msg = if earliest_date == latest_date || earliest_date.is_empty() {
-        format!("did log: {} event(s)", events.len())
+    let title_line = if earliest_date == latest_date || earliest_date.is_empty() {
+        if latest_date.is_empty() {
+            format!("did log: {} event(s)", events.len())
+        } else {
+            format!("did log: {} event(s) ({})", events.len(), latest_date)
+        }
     } else {
         format!(
             "did log: {} event(s) ({} to {})",
@@ -2057,7 +2091,38 @@ pub fn cmd_log(
         )
     };
 
-    print_boxed_stderr(&summary_msg);
+    let mut parts = Vec::new();
+    if created_cnt > 0 {
+        parts.push(format!("{} created", created_cnt));
+    }
+    if moved_cnt > 0 {
+        parts.push(format!("{} moved", moved_cnt));
+    }
+    if closed_cnt > 0 {
+        parts.push(format!("{} closed", closed_cnt));
+    }
+    if reopened_cnt > 0 {
+        parts.push(format!("{} reopened", reopened_cnt));
+    }
+    if blocked_cnt > 0 {
+        parts.push(format!("{} blocked", blocked_cnt));
+    }
+    if unblocked_cnt > 0 {
+        parts.push(format!("{} unblocked", unblocked_cnt));
+    }
+    if deleted_cnt > 0 {
+        parts.push(format!("{} deleted", deleted_cnt));
+    }
+    if modified_cnt > 0 {
+        parts.push(format!("{} modified", modified_cnt));
+    }
+
+    let mut summary_lines = vec![title_line];
+    if !parts.is_empty() {
+        summary_lines.push(format!("Breakdown: {}", parts.join(", ")));
+    }
+
+    print_boxed_stderr_lines(&summary_lines);
 
     if json {
         println!("[");
