@@ -165,8 +165,8 @@ fn title_to_filename(title: &str) -> String {
     if trimmed.is_empty() {
         return "issue.md".to_string();
     }
-    let (name_part, ext) = if trimmed.ends_with(".md") {
-        (&trimmed[..trimmed.len() - 3], ".md")
+    let (name_part, ext) = if let Some(stripped) = trimmed.strip_suffix(".md") {
+        (stripped, ".md")
     } else {
         (trimmed, ".md")
     };
