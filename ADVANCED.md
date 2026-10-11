@@ -17,7 +17,7 @@ When a `did` subcommand executes:
 
 | Hook | CLI Trigger | Description |
 | :--- | :--- | :--- |
-| `add` | `did add <PATH>` | Executed during task creation before creating file. |
+| `add` | `did add [TITLE]` | Executed during task creation before creating file. |
 | `show` | `did show <PATH>` | Executed during task display to output guidelines or context. |
 | `status` | `did status [PATH]` | Executed before status listing. |
 | `close` | `did close <PATH>` / `did done` | Executed before resolving a task. |
@@ -46,7 +46,6 @@ When a `did` subcommand executes:
 | `DID_THEME` | Configures markdown and syntax highlighting themes (`dark`, `light`/`github`, `solarized`, `mocha`). |
 | `DID_SYNTAX_THEME` | Overrides syntax highlighting theme specifically (`InspiredGitHub`, `Solarized (dark)`, `base16-ocean.dark`, `base16-mocha.dark`). |
 | `DID_RELATED_LIMIT` | Sets maximum number of related items displayed in `did show` (defaults to `5`). |
-| `EDITOR` | Specifies the text editor to invoke when running `did add PATH` without a `-m` message flag (defaults to `vi`). |
 
 ---
 

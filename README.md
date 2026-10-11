@@ -17,11 +17,14 @@ For advanced documentation, hook specifications, and environment variable refere
 
 ### 1. Add Issues
 ```bash
-# Add issue with inline content (auto-creates .did/ directory if needed)
-did add refine/auth/jwt.md -m "Implement JWT token validation"
+# Add an issue with a title (auto-creates .did/ directory if needed)
+did add "Implement JWT token validation"
 
-# Add issue using $EDITOR
-did add refine/ui/login.md
+# Add an issue with piped body content
+echo "Detailed requirements..." | did add "Implement JWT token validation"
+
+# Pipe directly into did without a subcommand to create an issue
+echo -e "Fix login bug\n\nSteps to reproduce..." | did
 ```
 
 ### 2. Block Sub-Tasks
