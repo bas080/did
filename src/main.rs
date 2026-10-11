@@ -8,7 +8,7 @@ use cli::Cli;
 use repo::Repo;
 use std::env;
 use std::fs::OpenOptions;
-use std::io::Write;
+use std::io::{IsTerminal, Write};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
@@ -52,8 +52,30 @@ fn main() -> ExitCode {
             (name, code)
         }
         None => {
-            let code = commands::cmd_help(repo_opt.as_ref(), None);
-            ("help".to_string(), code)
+            let mut stdin_content = String::new();
+            let is_piped = !std::io::stdin().is_terminal();
+            if is_piped {
+                use std::io::Read;
+                let _ = std::io::stdin().read_to_string(&mut stdin_content);
+            }
+
+            if is_piped && !stdin_content.trim().is_empty() {
+                let repo = match repo_opt.clone() {
+                    Some(r) => r,
+                    None => match Repo::init(&current_dir) {
+                        Ok(r) => r,
+                        Err(e) => {
+                            eprintln!("error initializing .did directory: {}", e);
+                            return ExitCode::FAILURE;
+                        }
+                    },
+                };
+                let code = commands::cmd_add_with_content(&repo, None, &stdin_content);
+                ("add".to_string(), code)
+            } else {
+                let code = commands::cmd_help(repo_opt.as_ref(), None);
+                ("help".to_string(), code)
+            }
         }
     };
 

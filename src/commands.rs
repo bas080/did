@@ -4,6 +4,7 @@ use crate::cli::Commands;
 use crate::repo::Repo;
 use std::env;
 use std::fs;
+use std::io::{IsTerminal, Read};
 use std::path::{Component, Path, PathBuf};
 use std::process::{Command, ExitCode};
 use walkdir::WalkDir;
@@ -47,7 +48,7 @@ fn check_subcommand_alias_warning() {
 pub fn run(repo_opt: Option<Repo>, command: Commands, global_all: bool) -> ExitCode {
     check_subcommand_alias_warning();
     match command {
-        Commands::Add { path, message } => {
+        Commands::Add { title } => {
             let repo = match repo_opt {
                 Some(r) => r,
                 None => {
@@ -67,7 +68,7 @@ pub fn run(repo_opt: Option<Repo>, command: Commands, global_all: bool) -> ExitC
                     }
                 }
             };
-            cmd_add(&repo, &path, message)
+            cmd_add(&repo, title.as_deref())
         }
         Commands::Blocks { target, dest } => {
             let repo = match require_repo(repo_opt) {
@@ -159,8 +160,94 @@ fn require_repo(repo_opt: Option<Repo>) -> Result<Repo, ExitCode> {
     }
 }
 
-fn cmd_add(repo: &Repo, raw_path: &Path, message: Option<String>) -> ExitCode {
-    let target_path = repo.resolve_path(raw_path);
+fn title_to_filename(title: &str) -> String {
+    let trimmed = title.trim();
+    if trimmed.is_empty() {
+        return "issue.md".to_string();
+    }
+    let (name_part, ext) = if trimmed.ends_with(".md") {
+        (&trimmed[..trimmed.len() - 3], ".md")
+    } else {
+        (trimmed, ".md")
+    };
+
+    let mut slug = String::new();
+    let mut prev_dash = false;
+    for c in name_part.chars() {
+        if c.is_alphanumeric() || c == '.' || c == '_' {
+            slug.push(c);
+            prev_dash = false;
+        } else if c == '-' || c == '/' || c == '\\' || c.is_whitespace() {
+            if !prev_dash && !slug.is_empty() {
+                slug.push('-');
+                prev_dash = true;
+            }
+        }
+    }
+    let slug_trimmed = slug.trim_matches('-');
+    if slug_trimmed.is_empty() {
+        format!("issue{}", ext)
+    } else {
+        format!("{}{}", slug_trimmed, ext)
+    }
+}
+
+pub fn cmd_add(repo: &Repo, title_opt: Option<&str>) -> ExitCode {
+    let mut stdin_content = String::new();
+    if !std::io::stdin().is_terminal() {
+        let _ = std::io::stdin().read_to_string(&mut stdin_content);
+    }
+    cmd_add_with_content(repo, title_opt, &stdin_content)
+}
+
+pub fn cmd_add_with_content(repo: &Repo, title_opt: Option<&str>, stdin_content: &str) -> ExitCode {
+    let (title, content) = match title_opt {
+        Some(raw_title) if !raw_title.trim().is_empty() => {
+            let title = raw_title.trim().to_string();
+            let body = stdin_content.trim();
+            let content = if body.is_empty() {
+                format!("# {}\n", title)
+            } else if body.starts_with("# ") {
+                format!("{}\n", body)
+            } else {
+                format!("# {}\n\n{}\n", title, body)
+            };
+            (title, content)
+        }
+        _ => {
+            let trimmed_stdin = stdin_content.trim();
+            if trimmed_stdin.is_empty() {
+                eprintln!("error: issue title or piped stdin required for 'did add'");
+                return ExitCode::FAILURE;
+            }
+
+            let first_line = trimmed_stdin.lines().find(|l| !l.trim().is_empty()).unwrap_or("").trim();
+            let extracted_title = if first_line.starts_with('#') {
+                first_line.trim_start_matches('#').trim().to_string()
+            } else {
+                first_line.to_string()
+            };
+
+            let content = if trimmed_stdin.starts_with('#') {
+                format!("{}\n", trimmed_stdin)
+            } else {
+                format!("# {}\n\n{}\n", extracted_title, trimmed_stdin)
+            };
+
+            (extracted_title, content)
+        }
+    };
+
+    let filename = title_to_filename(&title);
+    let target_path = repo.did_dir.join(&filename);
+
+    if std::env::var("DID_DEBUG").map(|v| !v.is_empty()).unwrap_or(false) {
+        eprintln!(
+            "[DEBUG] Issue added: title='{}' -> target='{}'",
+            title,
+            target_path.display()
+        );
+    }
 
     if target_path.exists() || fs::symlink_metadata(&target_path).is_ok() {
         eprintln!(
@@ -168,65 +255,6 @@ fn cmd_add(repo: &Repo, raw_path: &Path, message: Option<String>) -> ExitCode {
             repo.relative_display_path(&target_path)
         );
         return ExitCode::FAILURE;
-    }
-
-    if let Some(parent_dir) = target_path.parent() {
-        if !parent_dir.is_dir() {
-            // Check if parent_dir is a file or if a file exists with parent_dir's stem (e.g. parent.md)
-            let existing_file = if parent_dir.is_file() {
-                Some(parent_dir.to_path_buf())
-            } else if let Some(grandparent) = parent_dir.parent() {
-                let stem = parent_dir.file_name().unwrap_or_default().to_string_lossy();
-                let mut found = None;
-                if let Ok(entries) = fs::read_dir(grandparent) {
-                    for entry in entries.flatten() {
-                        let p = entry.path();
-                        if p.is_file() && !p.is_symlink() {
-                            if let Some(p_stem) = p.file_stem() {
-                                if p_stem.to_string_lossy() == stem {
-                                    found = Some(p);
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                }
-                found
-            } else {
-                None
-            };
-
-            if let Some(old_file) = existing_file {
-                let ext = old_file
-                    .extension()
-                    .map(|e| e.to_string_lossy().to_string())
-                    .unwrap_or_else(|| "md".to_string());
-                let temp_file = old_file.with_extension(format!("{}.tmp_did_convert", ext));
-
-                if let Err(e) = fs::rename(&old_file, &temp_file) {
-                    eprintln!("error renaming parent file for conversion: {}", e);
-                    return ExitCode::FAILURE;
-                }
-
-                if let Err(e) = fs::create_dir_all(parent_dir) {
-                    eprintln!("error creating parent directory: {}", e);
-                    let _ = fs::rename(&temp_file, &old_file);
-                    return ExitCode::FAILURE;
-                }
-
-                let index_file = parent_dir.join(format!("index.{}", ext));
-                if let Err(e) = fs::rename(&temp_file, &index_file) {
-                    eprintln!("error moving parent content to index file: {}", e);
-                    return ExitCode::FAILURE;
-                }
-
-                // Update relative symlinks pointing to old parent file across .did
-                update_symlinks(repo, &old_file, &index_file);
-            } else if let Err(e) = fs::create_dir_all(parent_dir) {
-                eprintln!("error creating directories: {}", e);
-                return ExitCode::FAILURE;
-            }
-        }
     }
 
     let target_rel = repo.relative_display_path(&target_path);
@@ -247,54 +275,9 @@ fn cmd_add(repo: &Repo, raw_path: &Path, message: Option<String>) -> ExitCode {
         return ExitCode::FAILURE;
     }
 
-    let default_header = || {
-        let stem = target_path
-            .file_stem()
-            .unwrap_or_default()
-            .to_string_lossy();
-        format!("# {}\n", stem)
-    };
-
-    if let Some(msg) = message {
-        let content = if msg.trim().is_empty() {
-            default_header()
-        } else if msg.ends_with('\n') {
-            msg
-        } else {
-            format!("{}\n", msg)
-        };
-        if let Err(e) = fs::write(&target_path, content) {
-            eprintln!("error writing file: {}", e);
-            return ExitCode::FAILURE;
-        }
-    } else {
-        // Open $EDITOR
-        let editor = env::var("EDITOR").unwrap_or_else(|_| "vi".to_string());
-        // Touch file first
-        if let Err(e) = fs::write(&target_path, "") {
-            eprintln!("error creating file: {}", e);
-            return ExitCode::FAILURE;
-        }
-
-        let status = Command::new(&editor).arg(&target_path).status();
-
-        match status {
-            Ok(s) if s.success() => {
-                if let Ok(content) = fs::read_to_string(&target_path) {
-                    if content.trim().is_empty() {
-                        let header = default_header();
-                        if let Err(e) = fs::write(&target_path, header) {
-                            eprintln!("error writing file: {}", e);
-                            return ExitCode::FAILURE;
-                        }
-                    }
-                }
-            }
-            _ => {
-                eprintln!("error: editor '{}' failed or exited with error", editor);
-                return ExitCode::FAILURE;
-            }
-        }
+    if let Err(e) = fs::write(&target_path, content) {
+        eprintln!("error writing file: {}", e);
+        return ExitCode::FAILURE;
     }
 
     ExitCode::SUCCESS
@@ -1715,7 +1698,7 @@ fn print_hooks_topic_help() {
         - `DID_REPO_ROOT`: Absolute path to repository root\n\
         - `DID_STATE_DIR`: Absolute path to `.did` state directory\n\n\
         ## Supported Lifecycle Hooks\n\
-        - `add`: Executed during `did add <PATH>`\n\
+        - `add`: Executed during `did add [TITLE]`\n\
         - `show`: Executed during `did show <PATH>`\n\
         - `status`: Executed during `did status [PATH]`\n\
         - `done`: Executed before task completion in `did done <PATH>`\n\

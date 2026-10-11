@@ -19,14 +19,10 @@ pub struct Cli {
 
 #[derive(Subcommand, Debug)]
 pub enum Commands {
-    /// Create a task node or nested issue at PATH
+    /// Create a task issue
     Add {
-        /// Task path
-        path: PathBuf,
-
-        /// Message / content for the task
-        #[arg(short = 'm', long = "message")]
-        message: Option<String>,
+        /// Optional issue title
+        title: Option<String>,
     },
 
     /// List actionables (leaf nodes with all sub-items done)
