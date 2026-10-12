@@ -86,6 +86,16 @@ sudo mv did /usr/local/bin/
 did --help
 ```
 
+### Direct Binary Download (Windows x86_64)
+
+In PowerShell:
+```powershell
+Invoke-WebRequest -Uri "https://github.com/bas080/did/releases/download/latest/did-windows-x86_64.exe" -OutFile "$env:USERPROFILE\did.exe"
+# Add to PATH if not already present
+$env:PATH += ";$env:USERPROFILE"
+did --help
+```
+
 ### Build from Source (Cargo)
 
 ```bash
