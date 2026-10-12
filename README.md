@@ -69,6 +69,12 @@ did open implement/auth/jwt.md
 did test
 ```
 
+### 7. Interactive Fuzzy Finder
+```bash
+# Browse issues interactively with issue preview (requires fzf)
+did fzf
+```
+
 ## Installation
 
 ### Direct Binary Download (Linux x86_64)

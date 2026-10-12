@@ -115,6 +115,12 @@ pub enum Commands {
         recursive: bool,
     },
 
+    /// Interactive fuzzy finder with issue preview (requires fzf)
+    Fzf {
+        /// Optional task path or directory to filter
+        path: Option<PathBuf>,
+    },
+
     /// View task Git history and lifecycle events
     Log {
         /// Optional task path or directory to filter history
