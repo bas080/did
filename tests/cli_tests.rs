@@ -360,6 +360,25 @@ fn test_search_feature() {
 }
 
 #[test]
+fn test_fuzzy_search_typo_tolerance() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    fs::create_dir_all(root.join(".did/backend/auth")).unwrap();
+    fs::write(root.join(".did/backend/auth/jwt.md"), "JSON Web Token verification").unwrap();
+
+    // Search typo "authjwt" matches backend/auth/jwt.md
+    let (success1, stdout1, _) = did_cmd(root, &["query", "authjwt"]);
+    assert!(success1);
+    assert!(stdout1.contains("backend/auth/jwt.md"));
+
+    // Search typo "jwtoken" matches line in backend/auth/jwt.md
+    let (success2, stdout2, _) = did_cmd(root, &["query", "jwtoken"]);
+    assert!(success2);
+    assert!(stdout2.contains("backend/auth/jwt.md: JSON Web Token verification"));
+}
+
+#[test]
 fn test_autocomplete() {
     let dir = tempdir().unwrap();
     let root = dir.path();
