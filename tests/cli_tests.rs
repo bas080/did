@@ -1782,3 +1782,75 @@ fn test_more_error_branches_for_coverage() {
     // fzf with tasks present
     let _ = did_cmd(root, &["fzf", "task.md"]);
 }
+
+#[test]
+fn test_hook_box_colors_by_exit_code() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    fs::create_dir_all(root.join(".did")).unwrap();
+    did_cmd_stdin(root, &["add", "task.md"], "Task content");
+
+    let hook_dir = root.join(".did/.hooks");
+    fs::create_dir_all(&hook_dir).unwrap();
+
+    // 1. Executable hook with exit 0 -> Green box (\x1b[32m)
+    let hook_show = hook_dir.join("show");
+    fs::write(&hook_show, "#!/bin/sh\necho \"hook stdout success\"\nexit 0\n").unwrap();
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(&hook_show).unwrap().permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&hook_show, perms).unwrap();
+
+        let (success, _, stderr) = did_cmd_env(
+            root,
+            &["show", "task.md"],
+            &[("FORCE_COLOR", "1"), ("DID_BOX", "1")],
+        );
+        assert!(success);
+        assert!(stderr.contains("hook stdout success"));
+        assert!(stderr.contains("\x1b[32m")); // Green border for exit 0
+    }
+
+    // 2. Executable hook with exit 1 -> Red box (\x1b[31m)
+    fs::write(&hook_show, "#!/bin/sh\necho \"hook stdout failure\"\nexit 1\n").unwrap();
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(&hook_show).unwrap().permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&hook_show, perms).unwrap();
+
+        let (success, _, stderr) = did_cmd_env(
+            root,
+            &["show", "task.md"],
+            &[("FORCE_COLOR", "1"), ("DID_BOX", "1")],
+        );
+        assert!(!success);
+        assert!(stderr.contains("hook stdout failure"));
+        assert!(stderr.contains("\x1b[31m")); // Red border for exit 1
+    }
+
+    // 3. Static non-executable hook file -> Green box (\x1b[32m)
+    fs::write(&hook_show, "Static hook guidelines").unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(&hook_show).unwrap().permissions();
+        perms.set_mode(0o644);
+        fs::set_permissions(&hook_show, perms).unwrap();
+    }
+
+    let (success, _, stderr) = did_cmd_env(
+        root,
+        &["show", "task.md"],
+        &[("FORCE_COLOR", "1"), ("DID_BOX", "1")],
+    );
+    assert!(success);
+    assert!(stderr.contains("Static hook guidelines"));
+    assert!(stderr.contains("\x1b[32m")); // Green border for static file
+}

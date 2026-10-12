@@ -1092,12 +1092,17 @@ fn run_ancestor_hooks(repo: &Repo, start_path: &Path, env_spec: HookEnv) -> Resu
                 let output = cmd.output();
                 match output {
                     Ok(out) => {
+                        let box_style = if out.status.success() {
+                            crate::renderer::BoxStyle::HookSuccess
+                        } else {
+                            crate::renderer::BoxStyle::HookFailure
+                        };
                         let stdout_str = String::from_utf8_lossy(&out.stdout);
                         if !stdout_str.is_empty() {
                             if printed_any {
                                 eprintln!();
                             }
-                            crate::renderer::draw_box_to(&mut std::io::stderr(), "", &stdout_str, crate::renderer::BoxStyle::Hook);
+                            crate::renderer::draw_box_to(&mut std::io::stderr(), "", &stdout_str, box_style);
                             printed_any = true;
                         }
                         let stderr_str = String::from_utf8_lossy(&out.stderr);
@@ -1122,7 +1127,7 @@ fn run_ancestor_hooks(repo: &Repo, start_path: &Path, env_spec: HookEnv) -> Resu
                     eprintln!();
                 }
                 if let Ok(content) = fs::read_to_string(&hook_p) {
-                    crate::renderer::draw_box_to(&mut std::io::stderr(), "", &content, crate::renderer::BoxStyle::Hook);
+                    crate::renderer::draw_box_to(&mut std::io::stderr(), "", &content, crate::renderer::BoxStyle::HookSuccess);
                 }
                 printed_any = true;
             }
