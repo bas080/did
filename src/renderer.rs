@@ -9,7 +9,10 @@ use termimad::{terminal_size, MadSkin};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BoxStyle {
+    #[allow(dead_code)]
     Hook,           // Red border
+    HookSuccess,    // Green border
+    HookFailure,    // Red border
     #[allow(dead_code)]
     TaskContent,    // Cyan border
     AdditionalInfo, // Yellow border
@@ -230,7 +233,8 @@ pub fn draw_box_to<W: std::io::Write>(writer: &mut W, title: &str, content_md: &
     let use_color = should_color();
     let (color_code, reset) = if use_color {
         let code = match style {
-            BoxStyle::Hook => "\x1b[31m",
+            BoxStyle::Hook | BoxStyle::HookFailure => "\x1b[31m",
+            BoxStyle::HookSuccess => "\x1b[32m",
             BoxStyle::TaskContent => "\x1b[36m",
             BoxStyle::AdditionalInfo => "\x1b[33m",
         };
