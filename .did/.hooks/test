@@ -1,7 +1,14 @@
 #!/bin/sh
-if ! CARGO_TEST_OUT=$(cargo test 2>&1); then
-    echo "$CARGO_TEST_OUT" >&2
-    exit 1
+if command -v cargo-llvm-cov >/dev/null 2>&1; then
+    if ! CARGO_TEST_OUT=$(cargo llvm-cov --all-targets 2>&1); then
+        echo "$CARGO_TEST_OUT" >&2
+        exit 1
+    fi
+else
+    if ! CARGO_TEST_OUT=$(cargo test 2>&1); then
+        echo "$CARGO_TEST_OUT" >&2
+        exit 1
+    fi
 fi
 
 # Check for issues in implement that still contain questions for @bas080
