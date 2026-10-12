@@ -1648,6 +1648,39 @@ fn test_bare_pipe_into_did() {
 }
 
 #[test]
+fn test_bare_pipe_creates_repo_if_missing() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    assert!(!root.join(".did").exists());
+    let (success, _, _) = did_cmd_stdin(root, &[], "Piped content without existing repo");
+    assert!(success);
+    assert!(root.join(".did").is_dir());
+}
+
+#[test]
+fn test_add_empty_stdin_error() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    fs::create_dir_all(root.join(".did")).unwrap();
+    let (success, _, stderr) = did_cmd_stdin(root, &["add"], "   \n\t ");
+    assert!(!success);
+    assert!(stderr.contains("issue title or piped stdin required"));
+}
+
+#[test]
+fn test_add_hash_header_title_stdin() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    fs::create_dir_all(root.join(".did")).unwrap();
+    let (success, _, _) = did_cmd_stdin(root, &["add"], "# Header Title\n\nTask details");
+    assert!(success);
+    assert!(root.join(".did/Header-Title.md").is_file());
+}
+
+#[test]
 fn test_did_fzf_subcommand() {
     let dir = tempdir().unwrap();
     let root = dir.path();
@@ -1661,6 +1694,22 @@ fn test_did_fzf_subcommand() {
 }
 
 #[test]
+fn test_fzf_with_path_arg_and_empty_check() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    fs::create_dir_all(root.join(".did")).unwrap();
+
+    let (s_empty, _, stderr_empty) = did_cmd(root, &["fzf"]);
+    assert!(s_empty);
+    assert!(stderr_empty.contains("No tasks found."));
+
+    let (s_nonexist, _, stderr_nonexist) = did_cmd(root, &["fzf", "non_existent"]);
+    assert!(!s_nonexist);
+    assert!(stderr_nonexist.contains("path does not exist"));
+}
+
+#[test]
 fn test_did_fzf_missing_binary_fails() {
     let dir = tempdir().unwrap();
     let root = dir.path();
@@ -1671,4 +1720,41 @@ fn test_did_fzf_missing_binary_fails() {
     let (success, _, stderr) = did_cmd_env(root, &["fzf"], &[("PATH", "")]);
     assert!(!success);
     assert!(stderr.contains("fzf' executable was not found in PATH"));
+}
+
+#[test]
+fn test_more_error_branches_for_coverage() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    fs::create_dir_all(root.join(".did")).unwrap();
+
+    // open -r non-existent
+    let (s1, _, err1) = did_cmd(root, &["open", "-r", "non_existent"]);
+    assert!(!s1);
+    assert!(err1.contains("path does not exist"));
+
+    // open -r file (not dir)
+    did_cmd_stdin(root, &["add", "task.md"], "Task");
+    did_cmd(root, &["done", "task.md"]);
+    let (s2, _, _) = did_cmd(root, &["open", "-r", ".task.md"]);
+    assert!(s2);
+
+    // blocks on non-existent
+    let (s3, _, err3) = did_cmd(root, &["blocks", "non_existent.md", "dest.md"]);
+    assert!(!s3);
+    assert!(err3.contains("target does not exist"));
+
+    // status with non-existent path
+    let (s4, _, err4) = did_cmd(root, &["status", "non_existent"]);
+    assert!(!s4);
+    assert!(err4.contains("path does not exist"));
+
+    // rm non-existent
+    let (s5, _, err5) = did_cmd(root, &["rm", "non_existent.md"]);
+    assert!(!s5);
+    assert!(err5.contains("path does not exist"));
+
+    // fzf with tasks present
+    let _ = did_cmd(root, &["fzf", "task.md"]);
 }
