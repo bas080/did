@@ -651,6 +651,53 @@ fn cmd_status(repo: &Repo, raw_path: Option<&Path>, tree: bool, only_blocked: bo
     ExitCode::SUCCESS
 }
 
+fn fuzzy_match_score(haystack: &str, needle: &str) -> Option<i32> {
+    let needle_chars: Vec<char> = needle.to_lowercase().chars().collect();
+    if needle_chars.is_empty() {
+        return Some(0);
+    }
+
+    let haystack_lower = haystack.to_lowercase();
+    let haystack_chars: Vec<char> = haystack_lower.chars().collect();
+
+    let exact_substring = haystack_lower.contains(&needle.to_lowercase());
+
+    let mut score = if exact_substring { 100 } else { 0 };
+    let mut needle_idx = 0;
+    let mut prev_haystack_idx: Option<usize> = None;
+    let mut consecutive_matches = 0;
+
+    for (h_idx, &h_char) in haystack_chars.iter().enumerate() {
+        if needle_idx < needle_chars.len() && h_char == needle_chars[needle_idx] {
+            score += 10;
+
+            if let Some(prev) = prev_haystack_idx {
+                if h_idx == prev + 1 {
+                    consecutive_matches += 1;
+                    score += 5 * consecutive_matches;
+                } else {
+                    consecutive_matches = 0;
+                }
+            }
+            prev_haystack_idx = Some(h_idx);
+
+            if h_idx == 0 || matches!(haystack_chars.get(h_idx.wrapping_sub(1)), Some('/' | '-' | '_' | '.' | ' ')) {
+                score += 15;
+            }
+
+            needle_idx += 1;
+        }
+    }
+
+    if needle_idx == needle_chars.len() {
+        let len_diff = (haystack_chars.len() as i32) - (needle_chars.len() as i32);
+        score -= len_diff;
+        Some(score)
+    } else {
+        None
+    }
+}
+
 fn cmd_search(repo: &Repo, query: &str, raw_path: Option<&Path>, show_line_num: bool, tree: bool, all: bool) -> ExitCode {
     let root_path = match raw_path {
         Some(p) => repo.resolve_path(p),
@@ -683,8 +730,7 @@ fn cmd_search(repo: &Repo, query: &str, raw_path: Option<&Path>, show_line_num: 
         return ExitCode::FAILURE;
     }
 
-    let query_lower = query.to_lowercase();
-    let mut results = Vec::new();
+    let mut scored_results: Vec<(i32, String)> = Vec::new();
     let mut tree_items = Vec::new();
 
     for entry in WalkDir::new(&root_path)
@@ -713,19 +759,15 @@ fn cmd_search(repo: &Repo, query: &str, raw_path: Option<&Path>, show_line_num: 
 
             if should_include {
                 let rel_display = repo.relative_display_path(path);
-                let matches_path = rel_display.to_lowercase().contains(&query_lower);
+                let path_score = fuzzy_match_score(&rel_display, query);
 
-                let content_matches: Vec<(usize, String)> = if is_file {
+                let content_matches: Vec<(usize, String, i32)> = if is_file {
                     if let Ok(content) = fs::read_to_string(path) {
                         content
                             .lines()
                             .enumerate()
                             .filter_map(|(idx, line)| {
-                                if line.to_lowercase().contains(&query_lower) {
-                                    Some((idx + 1, line.to_string()))
-                                } else {
-                                    None
-                                }
+                                fuzzy_match_score(line, query).map(|score| (idx + 1, line.to_string(), score))
                             })
                             .collect()
                     } else {
@@ -743,23 +785,28 @@ fn cmd_search(repo: &Repo, query: &str, raw_path: Option<&Path>, show_line_num: 
 
                 if !content_matches.is_empty() {
                     tree_items.push((rel_display.clone(), status_indicator, is_blocked));
-                    for (line_num, snippet) in content_matches {
-                        if show_line_num {
-                            results.push(format!("{}:{}: {}", rel_display, line_num, snippet));
+                    for (line_num, snippet, score) in content_matches {
+                        let text = if show_line_num {
+                            format!("{}:{}: {}", rel_display, line_num, snippet)
                         } else {
-                            results.push(format!("{}: {}", rel_display, snippet));
-                        }
+                            format!("{}: {}", rel_display, snippet)
+                        };
+                        scored_results.push((score, text));
                     }
-                } else if matches_path {
+                } else if let Some(score) = path_score {
                     tree_items.push((rel_display.clone(), status_indicator, is_blocked));
-                    results.push(rel_display);
+                    scored_results.push((score, rel_display));
                 }
             }
         }
     }
 
-    results.sort();
-    results.dedup();
+    // Sort primarily by highest score descending, then by string representation
+    scored_results.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.cmp(&b.1)));
+    scored_results.dedup_by(|a, b| a.1 == b.1);
+
+    let results: Vec<String> = scored_results.into_iter().map(|(_, text)| text).collect();
+
     tree_items.sort_by(|a, b| a.0.cmp(&b.0));
     tree_items.dedup_by(|a, b| a.0 == b.0);
 
