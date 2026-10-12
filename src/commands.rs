@@ -2044,20 +2044,24 @@ pub fn cmd_fzf(repo: &Repo, raw_path: Option<PathBuf>, all: bool) -> ExitCode {
 
     let stdin_input = tasks.join("\n");
 
-    let (stdout_cfg, stderr_cfg) = if std::io::stdout().is_terminal() {
-        (std::process::Stdio::inherit(), std::process::Stdio::inherit())
-    } else {
-        (std::process::Stdio::piped(), std::process::Stdio::piped())
-    };
+    let is_tty = std::io::stdout().is_terminal() && std::io::stdin().is_terminal();
 
     let mut fzf_cmd = Command::new("fzf");
     fzf_cmd
         .arg("--ansi")
         .arg("--preview")
-        .arg("FORCE_COLOR=1 DID_BOX=1 did show {}")
-        .stdin(std::process::Stdio::piped())
-        .stdout(stdout_cfg)
-        .stderr(stderr_cfg);
+        .arg("FORCE_COLOR=1 DID_BOX=1 did show {}");
+
+    if !is_tty {
+        fzf_cmd.arg("--filter").arg("");
+        fzf_cmd.stdout(std::process::Stdio::piped());
+        fzf_cmd.stderr(std::process::Stdio::piped());
+    } else {
+        fzf_cmd.stdout(std::process::Stdio::inherit());
+        fzf_cmd.stderr(std::process::Stdio::inherit());
+    }
+
+    fzf_cmd.stdin(std::process::Stdio::piped());
 
     let mut child = match fzf_cmd.spawn() {
         Ok(c) => c,
