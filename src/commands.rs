@@ -2044,14 +2044,20 @@ pub fn cmd_fzf(repo: &Repo, raw_path: Option<PathBuf>, all: bool) -> ExitCode {
 
     let stdin_input = tasks.join("\n");
 
+    let (stdout_cfg, stderr_cfg) = if std::io::stdout().is_terminal() {
+        (std::process::Stdio::inherit(), std::process::Stdio::inherit())
+    } else {
+        (std::process::Stdio::piped(), std::process::Stdio::piped())
+    };
+
     let mut fzf_cmd = Command::new("fzf");
     fzf_cmd
         .arg("--ansi")
         .arg("--preview")
         .arg("FORCE_COLOR=1 DID_BOX=1 did show {}")
         .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::inherit())
-        .stderr(std::process::Stdio::inherit());
+        .stdout(stdout_cfg)
+        .stderr(stderr_cfg);
 
     let mut child = match fzf_cmd.spawn() {
         Ok(c) => c,
