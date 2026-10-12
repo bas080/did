@@ -1646,3 +1646,29 @@ fn test_bare_pipe_into_did() {
     assert!(content.contains("# Bare Pipe Feature"));
     assert!(content.contains("Feature description from bare pipe."));
 }
+
+#[test]
+fn test_did_fzf_subcommand() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    fs::create_dir_all(root.join(".did")).unwrap();
+    did_cmd(root, &["add", "fzf_task.md"]);
+
+    let (s_help, stdout_help, _) = did_cmd(root, &["help", "fzf"]);
+    assert!(s_help);
+    assert!(stdout_help.contains("fuzzy finder") || stdout_help.contains("fzf"));
+}
+
+#[test]
+fn test_did_fzf_missing_binary_fails() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    fs::create_dir_all(root.join(".did")).unwrap();
+    did_cmd(root, &["add", "fzf_task.md"]);
+
+    let (success, _, stderr) = did_cmd_env(root, &["fzf"], &[("PATH", "")]);
+    assert!(!success);
+    assert!(stderr.contains("fzf' executable was not found in PATH"));
+}

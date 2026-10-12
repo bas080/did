@@ -22,6 +22,12 @@ fn main() -> ExitCode {
         }
     }
 
+    if !commands::is_fzf_installed() {
+        if let Some(sub) = cmd.find_subcommand_mut("fzf") {
+            *sub = sub.clone().hide(true);
+        }
+    }
+
     let matches = match cmd.try_get_matches_from(&args) {
         Ok(m) => m,
         Err(e) => {

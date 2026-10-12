@@ -25,6 +25,7 @@ When a `did` subcommand executes:
 | `blocks` | `did blocks <TARGET> <DEST>` / `did link` | Executed before symlink creation. |
 | `mv` | `did mv <OLD> <NEW>` | Executed before moving or renaming tasks. |
 | `rm` | `did rm <PATH>` | Executed before deleting task files or directories. |
+| `fzf` | `did fzf [PATH]` | Interactive fuzzy finder listing issues with `did show` preview (requires fzf). |
 | `query` | `did query <QUERY>` | Executed before searching tasks and content. |
 | `test` | `did test` | Executed during repository health check. |
 | `help` | `did help [TOPIC]` | Executed when invoking help or running without subcommands to display way-of-working instructions. |

@@ -112,6 +112,13 @@ pub fn run(repo_opt: Option<Repo>, command: Commands, global_all: bool) -> ExitC
             };
             cmd_show(&repo, &path, global_all)
         }
+        Commands::Fzf { path } => {
+            let repo = match require_repo(repo_opt) {
+                Ok(r) => r,
+                Err(code) => return code,
+            };
+            cmd_fzf(&repo, path, global_all)
+        }
         Commands::Log {
             path,
             since,
@@ -1646,6 +1653,11 @@ pub fn cmd_help(repo_opt: Option<&Repo>, topic: Option<&str>) -> ExitCode {
                     *sub = sub.clone().hide(true);
                 }
             }
+            if !is_fzf_installed() {
+                if let Some(sub) = cmd.find_subcommand_mut("fzf") {
+                    *sub = sub.clone().hide(true);
+                }
+            }
             let _ = cmd.print_help();
             println!();
         }
@@ -1910,6 +1922,100 @@ fn compute_relative_path(from_dir: &Path, to_file: &Path) -> Option<PathBuf> {
         Some(PathBuf::from("."))
     } else {
         Some(rel)
+    }
+}
+
+pub fn is_fzf_installed() -> bool {
+    Command::new("fzf")
+        .arg("--version")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
+pub fn cmd_fzf(repo: &Repo, raw_path: Option<PathBuf>, all: bool) -> ExitCode {
+    if !is_fzf_installed() {
+        eprintln!("error: 'fzf' executable was not found in PATH.");
+        return ExitCode::FAILURE;
+    }
+
+    let root_path = match raw_path {
+        Some(ref p) => repo.resolve_path(p),
+        None => repo.did_dir.clone(),
+    };
+
+    if !root_path.exists() {
+        eprintln!(
+            "error: path does not exist: {}",
+            repo.relative_display_path(&root_path)
+        );
+        return ExitCode::FAILURE;
+    }
+
+    let mut tasks = Vec::new();
+    for entry in WalkDir::new(&root_path)
+        .into_iter()
+        .filter_entry(should_visit_entry)
+        .filter_map(|e| e.ok())
+    {
+        let path = entry.path();
+        if path == repo.did_dir || is_reserved_hook_file(path) {
+            continue;
+        }
+
+        if path.is_file() || entry.path_is_symlink() {
+            let file_name = path.file_name().unwrap_or_default().to_string_lossy();
+            let is_hidden = file_name.starts_with('.');
+            let is_blocked = !is_hidden && repo.has_unresolved_subitems(path);
+
+            let include = if all {
+                true
+            } else {
+                !is_hidden && !is_blocked
+            };
+
+            if include {
+                tasks.push(repo.relative_display_path(path));
+            }
+        }
+    }
+
+    tasks.sort();
+    tasks.dedup();
+
+    if tasks.is_empty() {
+        eprintln!("No tasks found.");
+        return ExitCode::SUCCESS;
+    }
+
+    let stdin_input = tasks.join("\n");
+
+    let mut fzf_cmd = Command::new("fzf");
+    fzf_cmd
+        .arg("--preview")
+        .arg("did show {}")
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::inherit())
+        .stderr(std::process::Stdio::inherit());
+
+    let mut child = match fzf_cmd.spawn() {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("error spawning fzf: {}", e);
+            return ExitCode::FAILURE;
+        }
+    };
+
+    if let Some(mut stdin) = child.stdin.take() {
+        use std::io::Write;
+        let _ = stdin.write_all(stdin_input.as_bytes());
+    }
+
+    match child.wait() {
+        Ok(status) if status.success() => ExitCode::SUCCESS,
+        _ => ExitCode::FAILURE,
     }
 }
 
