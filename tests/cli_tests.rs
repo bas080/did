@@ -1701,12 +1701,17 @@ fn test_fzf_with_path_arg_and_empty_check() {
     fs::create_dir_all(root.join(".did")).unwrap();
 
     let (s_empty, _, stderr_empty) = did_cmd(root, &["fzf"]);
-    assert!(s_empty);
-    assert!(stderr_empty.contains("No tasks found."));
+    if Command::new("fzf").arg("--version").output().is_ok() {
+        assert!(s_empty);
+        assert!(stderr_empty.contains("No tasks found."));
 
-    let (s_nonexist, _, stderr_nonexist) = did_cmd(root, &["fzf", "non_existent"]);
-    assert!(!s_nonexist);
-    assert!(stderr_nonexist.contains("path does not exist"));
+        let (s_nonexist, _, stderr_nonexist) = did_cmd(root, &["fzf", "non_existent"]);
+        assert!(!s_nonexist);
+        assert!(stderr_nonexist.contains("path does not exist"));
+    } else {
+        assert!(!s_empty);
+        assert!(stderr_empty.contains("fzf' executable was not found in PATH"));
+    }
 }
 
 #[test]
