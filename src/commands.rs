@@ -638,7 +638,7 @@ fn cmd_status(repo: &Repo, raw_path: Option<&Path>, tree: bool, only_blocked: bo
         }
     } else {
         let results: Vec<String> = items.into_iter().map(|(p, _, _)| p).collect();
-        print_results_with_limit(results, empty_msg);
+        print_results_with_limit(results, empty_msg, "status");
     }
 
     let summary_md = format!("{} blocked, {} closed", blocked_count, closed_count);
@@ -817,7 +817,7 @@ fn cmd_search(repo: &Repo, query: &str, raw_path: Option<&Path>, show_line_num: 
             print_tree_view(&root_path, &tree_items, repo);
         }
     } else {
-        print_results_with_limit(results, "No matching tasks found.");
+        print_results_with_limit(results, "No matching tasks found.", "query");
     }
 
     ExitCode::SUCCESS
@@ -944,7 +944,7 @@ fn print_tree_view(_root_path: &Path, items: &[(String, &'static str, bool)], _r
     }
 }
 
-fn print_results_with_limit(results: Vec<String>, empty_msg: &str) {
+fn print_results_with_limit(results: Vec<String>, empty_msg: &str, cmd_name: &str) {
     if results.is_empty() {
         if !empty_msg.is_empty() {
             eprintln!("{}", empty_msg);
@@ -966,10 +966,17 @@ fn print_results_with_limit(results: Vec<String>, empty_msg: &str) {
 
     if let Some(l) = limit {
         if l < total {
-            eprintln!(
-                "Notice: status limit reached ({}/{} items shown). Use status on a specific directory, search, or adjust limit.",
-                l, total
-            );
+            if cmd_name == "query" || cmd_name == "search" {
+                eprintln!(
+                    "Notice: query limit reached ({}/{} items shown). Use query on a specific directory or adjust limit.",
+                    l, total
+                );
+            } else {
+                eprintln!(
+                    "Notice: status limit reached ({}/{} items shown). Use status on a specific directory, search, or adjust limit.",
+                    l, total
+                );
+            }
         }
     }
 }
@@ -1291,9 +1298,10 @@ fn cmd_done(repo: &Repo, raw_path: &Path, recursive: bool) -> ExitCode {
 
     if is_dir {
         if !recursive {
+            let rel = repo.relative_display_path(&target_path);
             eprintln!(
-                "error: cannot complete a directory: {}",
-                repo.relative_display_path(&target_path)
+                "error: '{}' is a directory. Use 'did close -r {}' to close recursively.",
+                rel, rel
             );
             return ExitCode::FAILURE;
         }
@@ -1449,9 +1457,10 @@ fn cmd_undone(repo: &Repo, raw_path: &Path, recursive: bool) -> ExitCode {
 
     if is_dir {
         if !recursive {
+            let rel = repo.relative_display_path(&target_path);
             eprintln!(
-                "error: cannot undone a directory: {}",
-                repo.relative_display_path(&target_path)
+                "error: '{}' is a directory. Use 'did open -r {}' to reopen recursively.",
+                rel, rel
             );
             return ExitCode::FAILURE;
         }
