@@ -57,3 +57,18 @@ if [ -n "$UNDOCUMENTED_ENV" ]; then
     echo "$UNDOCUMENTED_ENV" >&2
     exit 1
 fi
+
+# Check that resolved issues in .did/implement/ (files starting with '.') do not contain unchecked checklist items (- [ ])
+UNCHECKED_RESOLVED=""
+for f in $(find .did/implement -type f -name ".*" ! -path "*/.hooks/*" 2>/dev/null); do
+    if grep -E -q '^[[:space:]]*- \[ \]' "$f"; then
+        UNCHECKED_RESOLVED="$UNCHECKED_RESOLVED
+  - $f"
+    fi
+done
+
+if [ -n "$UNCHECKED_RESOLVED" ]; then
+    echo "error: resolved issue files in .did/implement/ contain unchecked checklist items (- [ ]):" >&2
+    echo "$UNCHECKED_RESOLVED" >&2
+    exit 1
+fi
