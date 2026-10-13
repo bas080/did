@@ -356,7 +356,7 @@ fn test_search_feature() {
     assert!(success_lim);
     let lines: Vec<&str> = stdout_lim.trim().lines().collect();
     assert_eq!(lines.len(), 1);
-    assert!(stderr_lim.contains("status limit reached"));
+    assert!(stderr_lim.contains("query limit reached"));
 }
 
 #[test]
@@ -916,7 +916,7 @@ fn test_done_directory_non_existent_and_already_done() {
 
     let (s1, _, err1) = did_cmd(root, &["done", "sub"]);
     assert!(!s1);
-    assert!(err1.contains("cannot complete a directory"));
+    assert!(err1.contains("is a directory. Use 'did close -r sub' to close recursively"));
 
     let (s2, _, err2) = did_cmd(root, &["done", "non_existent.md"]);
     assert!(!s2);
@@ -938,7 +938,7 @@ fn test_undone_directory_non_existent_not_resolved_collision() {
 
     let (s1, _, err1) = did_cmd(root, &["undone", "sub"]);
     assert!(!s1);
-    assert!(err1.contains("cannot undone a directory"));
+    assert!(err1.contains("is a directory. Use 'did open -r sub' to reopen recursively"));
 
     let (s2, _, err2) = did_cmd(root, &["undone", "non_existent.md"]);
     assert!(!s2);
