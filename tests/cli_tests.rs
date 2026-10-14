@@ -1854,3 +1854,30 @@ fn test_hook_box_colors_by_exit_code() {
     assert!(stderr.contains("Static hook guidelines"));
     assert!(stderr.contains("\x1b[32m")); // Green border for static file
 }
+
+#[test]
+fn test_did_init_command() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    assert!(!root.join(".did").exists());
+
+    // 1. Initializing in an empty directory succeeds
+    let (success1, stdout1, _) = did_cmd(root, &["init"]);
+    assert!(success1);
+    assert!(root.join(".did").is_dir());
+    assert!(stdout1.contains("Initialized empty .did state directory"));
+
+    // 2. Initializing when .did already exists fails
+    let (success2, _, stderr2) = did_cmd(root, &["init"]);
+    assert!(!success2);
+    assert!(stderr2.contains("error: .did state directory already exists"));
+
+    // 3. Initializing with explicit path argument
+    let sub = root.join("project");
+    fs::create_dir_all(&sub).unwrap();
+    let (success3, stdout3, _) = did_cmd(root, &["init", sub.to_str().unwrap()]);
+    assert!(success3);
+    assert!(sub.join(".did").is_dir());
+    assert!(stdout3.contains("Initialized empty .did state directory"));
+}

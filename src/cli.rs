@@ -19,6 +19,12 @@ pub struct Cli {
 
 #[derive(Subcommand, Debug)]
 pub enum Commands {
+    /// Initialize a new .did state directory
+    Init {
+        /// Optional target directory
+        path: Option<PathBuf>,
+    },
+
     /// Create a task issue
     Add {
         /// Optional issue title

@@ -48,6 +48,7 @@ fn check_subcommand_alias_warning() {
 pub fn run(repo_opt: Option<Repo>, command: Commands, global_all: bool) -> ExitCode {
     check_subcommand_alias_warning();
     match command {
+        Commands::Init { path } => cmd_init(path.as_deref()),
         Commands::Add { title } => {
             let repo = match repo_opt {
                 Some(r) => r,
@@ -155,6 +156,36 @@ pub fn run(repo_opt: Option<Repo>, command: Commands, global_all: bool) -> ExitC
         Commands::Help { topic } => cmd_help(repo_opt.as_ref(), topic.as_deref()),
         Commands::Autocomplete { shell } => cmd_autocomplete(&shell),
     }
+}
+
+pub fn cmd_init(raw_path: Option<&Path>) -> ExitCode {
+    let target_dir = match raw_path {
+        Some(p) => p.to_path_buf(),
+        None => match env::current_dir() {
+            Ok(d) => d,
+            Err(e) => {
+                eprintln!("error getting current directory: {}", e);
+                return ExitCode::FAILURE;
+            }
+        },
+    };
+
+    let did_dir = target_dir.join(".did");
+    if did_dir.exists() {
+        eprintln!(
+            "error: .did state directory already exists at {}",
+            did_dir.display()
+        );
+        return ExitCode::FAILURE;
+    }
+
+    if let Err(e) = fs::create_dir_all(&did_dir) {
+        eprintln!("error creating .did directory: {}", e);
+        return ExitCode::FAILURE;
+    }
+
+    println!("Initialized empty .did state directory in {}", did_dir.display());
+    ExitCode::SUCCESS
 }
 
 fn require_repo(repo_opt: Option<Repo>) -> Result<Repo, ExitCode> {
@@ -1028,7 +1059,7 @@ fn is_reserved_hook_file(path: &Path) -> bool {
     let stem = path.file_stem().unwrap_or_default().to_string_lossy();
     if matches!(
         stem.as_ref(),
-        "show" | "status" | "done" | "close" | "undone" | "open" | "add" | "link" | "blocks" | "mv" | "move" | "test" | "query" | "remove" | "help"
+        "init" | "show" | "status" | "done" | "close" | "undone" | "open" | "add" | "link" | "blocks" | "mv" | "move" | "test" | "query" | "remove" | "help"
     ) {
         if let Some(parent) = path.parent() {
             let parent_name = parent.file_name().unwrap_or_default().to_string_lossy();
