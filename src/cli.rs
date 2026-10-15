@@ -5,11 +5,11 @@ use std::path::PathBuf;
 #[command(
     name = "did",
     version = "0.1.0",
-    about = "filesystem-native issue tracker with hooks for defining local software factories",
+    about = "filesystem-native note and workflow tracker with hooks for defining local software factories",
     disable_help_subcommand = true
 )]
 pub struct Cli {
-    /// Include resolved (hidden) tasks and blocked nodes
+    /// Include resolved (hidden) notes and linked nodes
     #[arg(short = 'a', long = "all", global = true)]
     pub all: bool,
 
@@ -25,28 +25,28 @@ pub enum Commands {
         path: Option<PathBuf>,
     },
 
-    /// Create a task issue
+    /// Create a note
     Add {
-        /// Optional issue title
+        /// Optional note title
         title: Option<String>,
     },
 
-    /// List actionables (leaf nodes with all sub-items done)
+    /// List open notes
     #[command(alias = "list")]
     Status {
         /// Optional subtree path
         path: Option<PathBuf>,
 
-        /// Display tasks in a tree structure
+        /// Display notes in a tree structure
         #[arg(short = 't', long = "tree")]
         tree: bool,
 
-        /// List blocked tasks
+        /// List blocked notes
         #[arg(short = 'b', long = "blocked")]
         blocked: bool,
     },
 
-    /// Search task paths and task file contents for QUERY
+    /// Search note paths and note file contents for QUERY
     #[command(alias = "search")]
     Query {
         /// Search query string
@@ -64,19 +64,19 @@ pub enum Commands {
         tree: bool,
     },
 
-    /// Print task contents at PATH (requires sub-items done unless -a)
+    /// Print note contents at PATH
     Show {
-        /// Task file path
+        /// Note file path
         path: PathBuf,
     },
 
-    /// Mark PATH as resolved (hides it; fails if sub-items remain open)
+    /// Mark PATH as resolved (hides it)
     #[command(alias = "done")]
     Close {
-        /// Task file path or directory
+        /// Note file path or directory
         path: PathBuf,
 
-        /// Mark all open tasks inside directory resolved recursively
+        /// Mark all open notes inside directory resolved recursively
         #[arg(short = 'r', long = "recursive")]
         recursive: bool,
     },
@@ -84,36 +84,36 @@ pub enum Commands {
     /// Mark a resolved PATH as open/undone (removes leading dot; updates symlinks)
     #[command(alias = "undone")]
     Open {
-        /// Resolved task file path or directory
+        /// Resolved note file path or directory
         path: PathBuf,
 
-        /// Reopen all resolved tasks inside directory recursively
+        /// Reopen all resolved notes inside directory recursively
         #[arg(short = 'r', long = "recursive")]
         recursive: bool,
     },
 
     /// Symlink TARGET into DEST directory using TARGET's basename
-    #[command(alias = "link", alias = "ln")]
-    Blocks {
+    #[command(alias = "blocks", alias = "ln")]
+    Link {
         /// Target path
         target: PathBuf,
         /// Destination directory path
         dest: PathBuf,
     },
 
-    /// Move or rename a task file or directory at OLD_PATH to NEW_PATH
+    /// Move or rename a note file or directory at OLD_PATH to NEW_PATH
     #[command(alias = "move")]
     Mv {
-        /// Source task path
+        /// Source note path
         old_path: PathBuf,
-        /// Target task path
+        /// Target note path
         new_path: PathBuf,
     },
 
-    /// Remove a task file or directory at PATH
+    /// Remove a note file or directory at PATH
     #[command(alias = "remove")]
     Rm {
-        /// Task file or directory path to remove
+        /// Note file or directory path to remove
         path: PathBuf,
 
         /// Remove directories and their contents recursively
@@ -121,15 +121,15 @@ pub enum Commands {
         recursive: bool,
     },
 
-    /// Interactive fuzzy finder with issue preview (requires fzf)
+    /// Interactive fuzzy finder with note preview (requires fzf)
     Fzf {
-        /// Optional task path or directory to filter
+        /// Optional note path or directory to filter
         path: Option<PathBuf>,
     },
 
-    /// View task Git history and lifecycle events
+    /// View note Git history and lifecycle events
     Log {
-        /// Optional task path or directory to filter history
+        /// Optional note path or directory to filter history
         path: Option<PathBuf>,
 
         /// Show events since specified date/time
