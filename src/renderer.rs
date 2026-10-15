@@ -14,7 +14,7 @@ pub enum BoxStyle {
     HookSuccess,    // Green border
     HookFailure,    // Red border
     #[allow(dead_code)]
-    TaskContent,    // Cyan border
+    NoteContent,    // Cyan border
     AdditionalInfo, // Yellow border
 }
 
@@ -235,7 +235,7 @@ pub fn draw_box_to<W: std::io::Write>(writer: &mut W, title: &str, content_md: &
         let code = match style {
             BoxStyle::Hook | BoxStyle::HookFailure => "\x1b[31m",
             BoxStyle::HookSuccess => "\x1b[32m",
-            BoxStyle::TaskContent => "\x1b[36m",
+            BoxStyle::NoteContent => "\x1b[36m",
             BoxStyle::AdditionalInfo => "\x1b[33m",
         };
         (code, "\x1b[0m")

@@ -75,15 +75,15 @@ fn test_add_and_show() {
     // Show directory fails
     let (success_show_dir, _, stderr_show_dir) = did_cmd(root, &["show", "backend"]);
     assert!(!success_show_dir);
-    assert!(stderr_show_dir.contains("requires a task file, got directory"));
+    assert!(stderr_show_dir.contains("requires a note file, got directory"));
     assert!(stderr_show_dir.contains("Use 'did status backend' instead"));
 
-    // Status -b lists blocked tasks
+    // Status -b lists blocked notes (empty in default pure note mode)
     did_cmd_stdin(root, &["add", "c.md"], "Task C");
     did_cmd(root, &["mv", "c.md", "backend/auth/sub/c.md"]);
-    let (success_b, stdout_b, _) = did_cmd(root, &["status", "-b"]);
+    let (success_b, _, stderr_b) = did_cmd(root, &["status", "-b"]);
     assert!(success_b);
-    assert!(stdout_b.contains("backend/auth/jwt.md"));
+    assert!(stderr_b.contains("No blocked notes found."));
 }
 
 #[test]
@@ -143,13 +143,13 @@ fn test_status_and_hierarchy() {
 
     fs::create_dir_all(root.join(".did")).unwrap();
 
-    // Add two leaf tasks in backend/auth/
+    // Add two leaf notes in backend/auth/
     did_cmd_stdin(root, &["add", "a.md"], "Task A");
     did_cmd(root, &["mv", "a.md", "backend/auth/a.md"]);
     did_cmd_stdin(root, &["add", "b.md"], "Task B");
     did_cmd(root, &["mv", "b.md", "backend/auth/b.md"]);
 
-    // Status shows both a.md and b.md as actionable
+    // Status shows both a.md and b.md
     let (success_stat, stdout_stat, stderr_stat) = did_cmd(root, &["status"]);
     assert!(success_stat);
     assert_eq!(stdout_stat.trim(), "backend/auth/a.md\nbackend/auth/b.md");
@@ -159,33 +159,32 @@ fn test_status_and_hierarchy() {
     did_cmd_stdin(root, &["add", "c.md"], "Task C");
     did_cmd(root, &["mv", "c.md", "backend/auth/sub/c.md"]);
 
-    // Now a.md and b.md are blocked by sub/c.md! Actionable is only sub/c.md
+    // In pure note mode, all open notes are listed in status
     let (_, stdout_stat2, stderr_stat2) = did_cmd(root, &["status"]);
-    assert_eq!(stdout_stat2.trim(), "backend/auth/sub/c.md");
-    assert!(stderr_stat2.contains("[2 blocked, 0 closed]"));
+    assert_eq!(stdout_stat2.trim(), "backend/auth/a.md\nbackend/auth/b.md\nbackend/auth/sub/c.md");
+    assert!(stderr_stat2.contains("[0 blocked, 0 closed]"));
 
     // Complete sub/c.md
     let (success_done_c, _, _) = did_cmd(root, &["done", "backend/auth/sub/c.md"]);
     assert!(success_done_c);
     assert!(root.join(".did/backend/auth/sub/.c.md").is_file());
 
-    // Now a.md and b.md are actionable again!
+    // Status lists remaining open notes
     let (_, stdout_stat3, stderr_stat3) = did_cmd(root, &["status"]);
-    println!("stderr_stat3: {:?}", stderr_stat3);
     assert_eq!(stdout_stat3.trim(), "backend/auth/a.md\nbackend/auth/b.md");
     assert!(stderr_stat3.contains("[0 blocked, 1 closed]"));
 
-    // Status -a shows resolved task as well
+    // Status -a shows resolved note as well
     let (_, stdout_stat_a, _) = did_cmd(root, &["status", "-a"]);
     assert!(stdout_stat_a.contains("backend/auth/sub/.c.md"));
 
-    // Status -t (tree mode) shows actionable task with status indicator [ ]
+    // Status -t (tree mode) shows open notes with status indicator [ ]
     let (success_tree, stdout_tree, _) = did_cmd(root, &["status", "-t"]);
     assert!(success_tree);
     assert!(stdout_tree.contains("[ ] a.md"));
     assert!(stdout_tree.contains("[ ] b.md"));
 
-    // Status -t -a (tree mode with all) shows closed task with [x]
+    // Status -t -a (tree mode with all) shows closed note with [x]
     let (success_tree_a, stdout_tree_a, _) = did_cmd(root, &["status", "-t", "-a"]);
     assert!(success_tree_a);
     assert!(stdout_tree_a.contains("- [x] sub/.c.md") || stdout_tree_a.contains("[x] sub/.c.md"));
@@ -244,23 +243,20 @@ fn test_show_and_done_blocked_output() {
 
     fs::create_dir_all(root.join(".did")).unwrap();
 
-    did_cmd_stdin(root, &["add", "auth.md"], "Auth task");
+    did_cmd_stdin(root, &["add", "auth.md"], "Auth note");
     did_cmd(root, &["mv", "auth.md", "backend/auth.md"]);
     did_cmd_stdin(root, &["add", "research.md"], "Research");
     did_cmd(root, &["mv", "research.md", "backend/auth/sub/research.md"]);
 
-    // show backend/auth.md succeeds by default on blocked node, showing task content on stdout and warnings on stderr
-    let (success_show, stdout_show, stderr_show) = did_cmd(root, &["show", "backend/auth.md"]);
+    // show backend/auth.md shows note content
+    let (success_show, stdout_show, _) = did_cmd(root, &["show", "backend/auth.md"]);
     assert!(success_show);
-    assert!(stdout_show.contains("Auth task"));
-    assert!(stderr_show.contains("[Blocked]") || stdout_show.contains("Blocked"));
-    assert!(stderr_show.contains("- backend/auth/sub/research.md") || stdout_show.contains("backend/auth/sub/research.md"));
+    assert!(stdout_show.contains("Auth note"));
 
-    // done backend/auth.md fails and lists blocking sub-items in stderr
-    let (success_done, _, stderr_done) = did_cmd(root, &["done", "backend/auth.md"]);
-    assert!(!success_done);
-    assert!(stderr_done.contains("error: cannot mark task 'backend/auth.md' done: unresolved sub-items remain:"));
-    assert!(stderr_done.contains("- backend/auth/sub/research.md"));
+    // done backend/auth.md succeeds in pure note system
+    let (success_done, _, _) = did_cmd(root, &["done", "backend/auth.md"]);
+    assert!(success_done);
+    assert!(root.join(".did/backend/.auth.md").is_file());
 }
 
 #[test]
@@ -336,13 +332,11 @@ fn test_search_feature() {
     assert!(success3);
     assert_eq!(stdout3.trim(), "frontend/login.md: Calls JWT auth endpoint");
 
-    // Search with -a flag and blocked items
+    // Search with subtree path argument
     did_cmd_stdin(root, &["add", "subtask.md"], "JWT helper task");
     did_cmd(root, &["mv", "subtask.md", "backend/auth/jwt/subtask.md"]);
-    // backend/auth/jwt/index.md is now blocked by jwt/subtask.md
-    let (_, stdout_no_a, stderr_no_a) = did_cmd(root, &["search", "TOKEN"]);
-    assert_eq!(stdout_no_a.trim(), "");
-    assert!(stderr_no_a.contains("No matching tasks found."));
+    let (_, stdout_search, _) = did_cmd(root, &["search", "TOKEN"]);
+    assert!(stdout_search.contains("backend/auth/jwt.md"));
 
     let (_, stdout_with_a, _) = did_cmd(root, &["search", "TOKEN", "-a"]);
     assert!(stdout_with_a.contains("backend/auth/jwt"));
@@ -402,20 +396,11 @@ fn test_debug_logging() {
         &[("DID_DEBUG", "1")],
     );
     assert!(success);
-    assert!(stderr.contains("[DEBUG]"));
+    assert!(stderr.contains("[DEBUG] Note added:"));
 
     fs::create_dir_all(root.join(".did/backend/auth/jwt")).unwrap();
     fs::write(root.join(".did/backend/auth/jwt/index.md"), "JWT Parent").unwrap();
     fs::write(root.join(".did/backend/auth/jwt/sub.md"), "Subtask").unwrap();
-
-    let (_, _, stderr_show) = did_cmd_env(
-        root,
-        &["show", "backend/auth/jwt/index.md"],
-        &[("DID_DEBUG", "1")],
-    );
-    assert!(stderr_show.contains("[DEBUG] Blocking check for 'backend/auth/jwt/index.md': 1 unresolved child sub-items found"));
-
-    did_cmd(root, &["done", "backend/auth/jwt/sub.md"]);
 
     let (success_done, _, stderr_done) = did_cmd_env(
         root,
@@ -600,7 +585,7 @@ fn test_bare_invocation_help() {
 
     let (success, stdout, _) = did_cmd(root, &[]);
     assert!(success);
-    assert!(stdout.contains("filesystem-native issue tracker with hooks for defining local software factories"));
+    assert!(stdout.contains("filesystem-native note and workflow tracker with hooks for defining local software factories"));
     assert!(stdout.contains("Usage:") || stdout.contains("Commands:"));
 }
 
@@ -1167,7 +1152,7 @@ fn test_did_test_empty_file_fails() {
 
     let (s_fail, _, stderr_fail) = did_cmd(root, &["test"]);
     assert!(!s_fail);
-    assert!(stderr_fail.contains("Empty or whitespace-only task file found: 'empty_task.md'"));
+    assert!(stderr_fail.contains("Empty or whitespace-only note file found: 'empty_task.md'"));
 }
 
 #[test]
@@ -1295,7 +1280,7 @@ fn test_help_topic_subcommand() {
 
     let (success, stdout, _) = did_cmd(root, &["help", "status"]);
     assert!(success);
-    assert!(stdout.contains("List actionables"));
+    assert!(stdout.contains("List open notes"));
 }
 
 #[test]
@@ -1305,9 +1290,9 @@ fn test_help_topic_alias() {
 
     for (alias, expected_term) in [
         ("ln", "Symlink TARGET"),
-        ("search", "Search task paths"),
+        ("search", "Search note paths"),
         ("move", "Move or rename"),
-        ("remove", "Remove a task file"),
+        ("remove", "Remove a note file"),
     ] {
         let (success, stdout, _) = did_cmd(root, &["help", alias]);
         assert!(success, "did help {} should succeed", alias);
@@ -1582,10 +1567,10 @@ fn test_did_log_subcommand() {
     assert!(s_log);
     assert!(stderr_log.contains("did log:"));
     assert!(stderr_log.contains("Breakdown:"));
-    assert!(stdout_log.contains("Task *created*: `auth.md` by *Test User*") || stdout_log.contains("Task *created*: `refine/auth.md` by *Test User*"));
-    assert!(stdout_log.contains("Task *blocked*: `refine/ui/auth.md` by `refine/auth.md` by *Test User*"));
-    assert!(stdout_log.contains("Task *unblocked*: `refine/ui/auth.md` from `implement/auth.md` by *Test User*"));
-    assert!(stdout_log.contains("Task *closed*: `implement/auth.md` -> `implement/.auth.md` by *Test User*"));
+    assert!(stdout_log.contains("Note *created*: `auth.md` by *Test User*") || stdout_log.contains("Note *created*: `refine/auth.md` by *Test User*"));
+    assert!(stdout_log.contains("Note *linked*: `refine/ui/auth.md` by `refine/auth.md` by *Test User*") || stdout_log.contains("Note *blocked*: `refine/ui/auth.md` by `refine/auth.md` by *Test User*"));
+    assert!(stdout_log.contains("Note *unlinked*: `refine/ui/auth.md` from `implement/auth.md` by *Test User*") || stdout_log.contains("Note *unblocked*: `refine/ui/auth.md` from `implement/auth.md` by *Test User*"));
+    assert!(stdout_log.contains("Note *closed*: `implement/auth.md` -> `implement/.auth.md` by *Test User*"));
 
     // Test --json flag
     let (s_json, stdout_json, stderr_json) = did_cmd(root, &["log", "--json"]);
@@ -1603,7 +1588,7 @@ fn test_did_log_subcommand() {
 
     let (s_help, stdout_help, _) = did_cmd(root, &["help", "log"]);
     assert!(s_help);
-    assert!(stdout_help.contains("View task Git history and lifecycle events"));
+    assert!(stdout_help.contains("View note Git history and lifecycle events"));
 }
 
 #[test]
@@ -1685,7 +1670,7 @@ fn test_add_empty_stdin_error() {
     fs::create_dir_all(root.join(".did")).unwrap();
     let (success, _, stderr) = did_cmd_stdin(root, &["add"], "   \n\t ");
     assert!(!success);
-    assert!(stderr.contains("issue title or piped stdin required"));
+    assert!(stderr.contains("note title or piped stdin required"));
 }
 
 #[test]
@@ -1722,7 +1707,7 @@ fn test_fzf_with_path_arg_and_empty_check() {
     let (s_empty, _, stderr_empty) = did_cmd(root, &["fzf"]);
     if Command::new("fzf").arg("--version").output().is_ok() {
         assert!(s_empty);
-        assert!(stderr_empty.contains("No tasks found."));
+        assert!(stderr_empty.contains("No notes found."));
 
         let (s_nonexist, _, stderr_nonexist) = did_cmd(root, &["fzf", "non_existent"]);
         assert!(!s_nonexist);
