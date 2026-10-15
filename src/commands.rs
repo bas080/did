@@ -28,8 +28,8 @@ fn check_subcommand_alias_warning() {
         let (alias, canonical) = match invoked.as_str() {
             "list" => ("list", "status"),
             "search" => ("search", "query"),
-            "link" => ("link", "blocks"),
-            "ln" => ("ln", "blocks"),
+            "blocks" => ("blocks", "link"),
+            "ln" => ("ln", "link"),
             "move" => ("move", "mv"),
             "remove" => ("remove", "rm"),
             "done" => ("done", "close"),
@@ -71,7 +71,7 @@ pub fn run(repo_opt: Option<Repo>, command: Commands, global_all: bool) -> ExitC
             };
             cmd_add(&repo, title.as_deref())
         }
-        Commands::Blocks { target, dest } => {
+        Commands::Link { target, dest } => {
             let repo = match require_repo(repo_opt) {
                 Ok(r) => r,
                 Err(code) => return code,
@@ -201,7 +201,7 @@ fn require_repo(repo_opt: Option<Repo>) -> Result<Repo, ExitCode> {
 fn title_to_filename(title: &str) -> String {
     let trimmed = title.trim();
     if trimmed.is_empty() {
-        return "issue.md".to_string();
+        return "note.md".to_string();
     }
     let (name_part, ext) = if let Some(stripped) = trimmed.strip_suffix(".md") {
         (stripped, ".md")
@@ -224,7 +224,7 @@ fn title_to_filename(title: &str) -> String {
     }
     let slug_trimmed = slug.trim_matches('-');
     if slug_trimmed.is_empty() {
-        format!("issue{}", ext)
+        format!("note{}", ext)
     } else {
         format!("{}{}", slug_trimmed, ext)
     }
@@ -255,7 +255,7 @@ pub fn cmd_add_with_content(repo: &Repo, title_opt: Option<&str>, stdin_content:
         _ => {
             let trimmed_stdin = stdin_content.trim();
             if trimmed_stdin.is_empty() {
-                eprintln!("error: issue title or piped stdin required for 'did add'");
+                eprintln!("error: note title or piped stdin required for 'did add'");
                 return ExitCode::FAILURE;
             }
 
@@ -281,7 +281,7 @@ pub fn cmd_add_with_content(repo: &Repo, title_opt: Option<&str>, stdin_content:
 
     if std::env::var("DID_DEBUG").map(|v| !v.is_empty()).unwrap_or(false) {
         eprintln!(
-            "[DEBUG] Issue added: title='{}' -> target='{}'",
+            "[DEBUG] Note added: title='{}' -> target='{}'",
             title,
             target_path.display()
         );
@@ -606,7 +606,6 @@ fn cmd_status(repo: &Repo, raw_path: Option<&Path>, tree: bool, only_blocked: bo
     }
 
     let mut items = Vec::new();
-    let mut blocked_count = 0;
     let mut closed_count = 0;
 
     for entry in WalkDir::new(&root_path)
@@ -625,20 +624,17 @@ fn cmd_status(repo: &Repo, raw_path: Option<&Path>, tree: bool, only_blocked: bo
         if is_file || is_symlink {
             let file_name = path.file_name().unwrap_or_default().to_string_lossy();
             let is_hidden = file_name.starts_with('.');
-            let is_blocked = !is_hidden && repo.has_unresolved_subitems(path);
 
             if is_hidden {
                 closed_count += 1;
-            } else if is_blocked {
-                blocked_count += 1;
             }
 
             let include_in_output = if only_blocked {
-                is_blocked
+                false
             } else if all {
                 true
             } else {
-                !is_hidden && !is_blocked
+                !is_hidden
             };
 
             if include_in_output {
@@ -647,7 +643,7 @@ fn cmd_status(repo: &Repo, raw_path: Option<&Path>, tree: bool, only_blocked: bo
                 } else {
                     "- [ ]"
                 };
-                items.push((repo.relative_display_path(path), status_indicator, is_blocked));
+                items.push((repo.relative_display_path(path), status_indicator, false));
             }
         }
     }
@@ -656,9 +652,9 @@ fn cmd_status(repo: &Repo, raw_path: Option<&Path>, tree: bool, only_blocked: bo
     items.dedup_by(|a, b| a.0 == b.0);
 
     let empty_msg = if only_blocked {
-        "No blocked tasks found."
+        "No blocked notes found."
     } else {
-        "No actionable tasks found."
+        "No open notes found."
     };
 
     if tree {
@@ -672,7 +668,7 @@ fn cmd_status(repo: &Repo, raw_path: Option<&Path>, tree: bool, only_blocked: bo
         print_results_with_limit(results, empty_msg, "status");
     }
 
-    let summary_md = format!("{} blocked, {} closed", blocked_count, closed_count);
+    let summary_md = format!("0 blocked, {} closed", closed_count);
     if crate::renderer::should_box() || crate::renderer::should_color() {
         crate::renderer::draw_box_to(&mut std::io::stderr(), "", &summary_md, crate::renderer::BoxStyle::AdditionalInfo);
     } else {
@@ -780,12 +776,12 @@ fn cmd_search(repo: &Repo, query: &str, raw_path: Option<&Path>, show_line_num: 
         if is_file || is_symlink {
             let file_name = path.file_name().unwrap_or_default().to_string_lossy();
             let is_hidden = file_name.starts_with('.');
-            let is_blocked = !is_hidden && repo.has_unresolved_subitems(path);
+            let is_blocked = false;
 
             let should_include = if all {
                 true
             } else {
-                !is_hidden && !is_blocked
+                !is_hidden
             };
 
             if should_include {
@@ -843,12 +839,12 @@ fn cmd_search(repo: &Repo, query: &str, raw_path: Option<&Path>, show_line_num: 
 
     if tree {
         if tree_items.is_empty() {
-            eprintln!("No matching tasks found.");
+            eprintln!("No matching notes found.");
         } else {
             print_tree_view(&root_path, &tree_items, repo);
         }
     } else {
-        print_results_with_limit(results, "No matching tasks found.", "query");
+        print_results_with_limit(results, "No matching notes found.", "query");
     }
 
     ExitCode::SUCCESS
@@ -1181,7 +1177,7 @@ fn find_hook_files(ancestor_dir: &Path, event: &str) -> Vec<PathBuf> {
     let fallback_event = match event {
         "close" => Some("done"),
         "open" => Some("undone"),
-        "blocks" => Some("link"),
+        "link" => Some("blocks"),
         _ => None,
     };
 
@@ -1245,28 +1241,10 @@ fn cmd_show(repo: &Repo, raw_path: &Path, _all: bool) -> ExitCode {
     if meta.is_dir() {
         let rel = repo.relative_display_path(&target_path);
         eprintln!(
-            "error: 'did show' requires a task file, got directory: {}. Use 'did status {}' instead.",
+            "error: 'did show' requires a note file, got directory: {}. Use 'did status {}' instead.",
             rel, rel
         );
         return ExitCode::FAILURE;
-    }
-
-    let blocking = repo.get_unresolved_blocking_items(&target_path);
-    if !blocking.is_empty() {
-        let mut block_md = String::new();
-        for item in &blocking {
-            block_md.push_str(&format!("* {}\n", item));
-        }
-        if crate::renderer::should_box() || crate::renderer::should_color() {
-            crate::renderer::draw_box_to(&mut std::io::stderr(), "Blocked", &block_md, crate::renderer::BoxStyle::AdditionalInfo);
-            eprintln!();
-        } else {
-            eprintln!("[Blocked]");
-            for item in blocking {
-                eprintln!("  - {}", item);
-            }
-            eprintln!();
-        }
     }
 
     let target_rel = repo.relative_display_path(&target_path);
@@ -1361,30 +1339,7 @@ fn cmd_done(repo: &Repo, raw_path: &Path, recursive: bool) -> ExitCode {
             depth_b.cmp(&depth_a).then_with(|| a.cmp(b))
         });
 
-        // Validate that no task has blocking items OUTSIDE target_path
-        for task in &tasks {
-            let blocking = repo.get_unresolved_blocking_items(task);
-            let external_blocking: Vec<_> = blocking
-                .into_iter()
-                .filter(|item| {
-                    let item_path = repo.did_dir.join(item.split(" -> ").next().unwrap_or(item));
-                    !item_path.starts_with(&target_path)
-                })
-                .collect();
-
-            if !external_blocking.is_empty() {
-                eprintln!(
-                    "error: cannot mark task '{}' done: unresolved external prerequisites remain:",
-                    repo.relative_display_path(task)
-                );
-                for item in external_blocking {
-                    eprintln!("  - {}", item);
-                }
-                return ExitCode::FAILURE;
-            }
-        }
-
-        // Complete each task
+        // Complete each note
         for task in tasks {
             if cmd_done_single(repo, &task) != ExitCode::SUCCESS {
                 return ExitCode::FAILURE;
@@ -1411,18 +1366,6 @@ fn cmd_done_single(repo: &Repo, target_path: &Path) -> ExitCode {
         return ExitCode::SUCCESS;
     }
 
-    let blocking = repo.get_unresolved_blocking_items(target_path);
-    if !blocking.is_empty() {
-        eprintln!(
-            "error: cannot mark task '{}' done: unresolved sub-items remain:",
-            repo.relative_display_path(target_path)
-        );
-        for item in blocking {
-            eprintln!("  - {}", item);
-        }
-        return ExitCode::FAILURE;
-    }
-
     let target_rel = repo.relative_display_path(target_path);
     if run_ancestor_hooks(
         repo,
@@ -1446,7 +1389,7 @@ fn cmd_done_single(repo: &Repo, target_path: &Path) -> ExitCode {
     let new_target_path = parent.join(&new_filename);
 
     if let Err(e) = fs::rename(target_path, &new_target_path) {
-        eprintln!("error marking task done: {}", e);
+        eprintln!("error marking note done: {}", e);
         return ExitCode::FAILURE;
     }
 
@@ -1536,7 +1479,7 @@ fn cmd_undone_single(repo: &Repo, target_path: &Path) -> ExitCode {
 
     if !file_name.starts_with('.') {
         eprintln!(
-            "error: task '{}' is not resolved (does not start with a dot)",
+            "error: note '{}' is not resolved (does not start with a dot)",
             repo.relative_display_path(target_path)
         );
         return ExitCode::FAILURE;
@@ -1573,7 +1516,7 @@ fn cmd_undone_single(repo: &Repo, target_path: &Path) -> ExitCode {
     }
 
     if let Err(e) = fs::rename(target_path, &new_target_path) {
-        eprintln!("error marking task undone: {}", e);
+        eprintln!("error marking note undone: {}", e);
         return ExitCode::FAILURE;
     }
 
@@ -1649,7 +1592,7 @@ fn cmd_test(repo: &Repo) -> ExitCode {
             if let Ok(content) = fs::read_to_string(path) {
                 if content.trim().is_empty() {
                     violations.push(format!(
-                        "Empty or whitespace-only task file found: '{}'",
+                        "Empty or whitespace-only note file found: '{}'",
                         rel_display
                     ));
                 }
@@ -1757,7 +1700,7 @@ pub fn cmd_help(repo_opt: Option<&Repo>, topic: Option<&str>) -> ExitCode {
         }
         Some(t) => {
             let t_resolved = match t {
-                "ln" | "link" => "blocks",
+                "ln" | "blocks" => "link",
                 "search" => "query",
                 "move" => "mv",
                 "remove" => "rm",
@@ -1787,7 +1730,7 @@ fn print_hooks_topic_help() {
         or static files named after lifecycle events.\n\n\
         ## Hook Discovery & Precedence\n\
         When a `did` command executes, `did` checks ancestor directories top-down from the `.did/` root\n\
-        to the target task directory for matching `.hooks/<event>` files.\n\n\
+        to the target note directory for matching `.hooks/<event>` files.\n\n\
         ## Hook Execution Rules\n\
         - Executable scripts (Unix `0o111` mode): `did` executes the script and displays stdout/stderr.\n\
           A non-zero exit code aborts the operation.\n\
@@ -1804,7 +1747,7 @@ fn print_hooks_topic_help() {
         - `add`: Executed during `did add [TITLE]`\n\
         - `show`: Executed during `did show <PATH>`\n\
         - `status`: Executed during `did status [PATH]`\n\
-        - `done`: Executed before task completion in `did done <PATH>`\n\
+        - `close`: Executed before note resolution in `did close <PATH>`\n\
         - `link`: Executed during `did link <TARGET> <DEST>`\n\
         - `mv`: Executed before moving/renaming in `did mv <OLD> <NEW>`\n\
         - `rm`: Executed before removing in `did rm <PATH>`\n\
@@ -2077,7 +2020,7 @@ pub fn cmd_fzf(repo: &Repo, raw_path: Option<PathBuf>, all: bool) -> ExitCode {
     tasks.dedup();
 
     if tasks.is_empty() {
-        eprintln!("No tasks found.");
+        eprintln!("No notes found.");
         return ExitCode::SUCCESS;
     }
 
@@ -2359,35 +2302,35 @@ impl LogEvent {
     fn to_markdown(&self) -> String {
         match &self.action {
             LogAction::Created(p) => format!(
-                "- **{}** Task *created*: `{}` by *{}* on `{}`",
+                "- **{}** Note *created*: `{}` by *{}* on `{}`",
                 self.hash, p, self.author, self.date
             ),
             LogAction::Moved { old, new } => format!(
-                "- **{}** Task *moved*: `{}` -> `{}` by *{}* on `{}`",
+                "- **{}** Note *moved*: `{}` -> `{}` by *{}* on `{}`",
                 self.hash, old, new, self.author, self.date
             ),
             LogAction::Closed { old, new } => format!(
-                "- **{}** Task *closed*: `{}` -> `{}` by *{}* on `{}`",
+                "- **{}** Note *closed*: `{}` -> `{}` by *{}* on `{}`",
                 self.hash, old, new, self.author, self.date
             ),
             LogAction::Reopened { old, new } => format!(
-                "- **{}** Task *reopened*: `{}` -> `{}` by *{}* on `{}`",
+                "- **{}** Note *reopened*: `{}` -> `{}` by *{}* on `{}`",
                 self.hash, old, new, self.author, self.date
             ),
             LogAction::Deleted(p) => format!(
-                "- **{}** Task *deleted*: `{}` by *{}* on `{}`",
+                "- **{}** Note *deleted*: `{}` by *{}* on `{}`",
                 self.hash, p, self.author, self.date
             ),
             LogAction::Modified(p) => format!(
-                "- **{}** Task *modified*: `{}` by *{}* on `{}`",
+                "- **{}** Note *modified*: `{}` by *{}* on `{}`",
                 self.hash, p, self.author, self.date
             ),
             LogAction::Blocked { path, target } => format!(
-                "- **{}** Task *blocked*: `{}` by `{}` by *{}* on `{}`",
+                "- **{}** Note *linked*: `{}` by `{}` by *{}* on `{}`",
                 self.hash, path, target, self.author, self.date
             ),
             LogAction::Unblocked { path, target } => format!(
-                "- **{}** Task *unblocked*: `{}` from `{}` by *{}* on `{}`",
+                "- **{}** Note *unlinked*: `{}` from `{}` by *{}* on `{}`",
                 self.hash, path, target, self.author, self.date
             ),
         }

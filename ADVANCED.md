@@ -6,7 +6,7 @@ This document covers advanced topics, architecture details, environment variable
 
 ## Software Factories & Lifecycle Hooks Specifications
 
-In `did`, any directory in `.did/` can contain a `.hooks/` directory with hook scripts named after CLI subcommands (`add`, `show`, `status`, `close`, `open`, `test`, `blocks`, `mv`, `rm`, `query`, `help`).
+In `did`, any directory in `.did/` can contain a `.hooks/` directory with hook scripts named after CLI subcommands (`add`, `show`, `status`, `close`, `open`, `test`, `link`, `mv`, `rm`, `query`, `help`).
 
 When a `did` subcommand executes:
 1. **Hook Discovery**: `did` traverses from the target path up to `.did/` looking for matching `.hooks/<cmd>` files.
@@ -17,16 +17,16 @@ When a `did` subcommand executes:
 
 | Hook | CLI Trigger | Description |
 | :--- | :--- | :--- |
-| `add` | `did add [TITLE]` | Executed during task creation before creating file. |
-| `show` | `did show <PATH>` | Executed during task display to output guidelines or context. |
+| `add` | `did add [TITLE]` | Executed during note creation before creating file. |
+| `show` | `did show <PATH>` | Executed during note display to output guidelines or context. |
 | `status` | `did status [PATH]` | Executed before status listing. |
-| `close` | `did close <PATH>` / `did done` | Executed before resolving a task. |
-| `open` | `did open <PATH>` / `did undone` | Executed before reopening a task. |
-| `blocks` | `did blocks <TARGET> <DEST>` / `did link` | Executed before symlink creation. |
-| `mv` | `did mv <OLD> <NEW>` | Executed before moving or renaming tasks. |
-| `rm` | `did rm <PATH>` | Executed before deleting task files or directories. |
-| `fzf` | `did fzf [PATH]` | Interactive fuzzy finder listing issues with `did show` preview (requires fzf). |
-| `query` | `did query <QUERY>` | Executed before searching tasks and content. |
+| `close` | `did close <PATH>` / `did done` | Executed before resolving a note. |
+| `open` | `did open <PATH>` / `did undone` | Executed before reopening a note. |
+| `link` | `did link <TARGET> <DEST>` / `did blocks` | Executed before symlink creation. |
+| `mv` | `did mv <OLD> <NEW>` | Executed before moving or renaming notes. |
+| `rm` | `did rm <PATH>` | Executed before deleting note files or directories. |
+| `fzf` | `did fzf [PATH]` | Interactive fuzzy finder listing notes with `did show` preview (requires fzf). |
+| `query` | `did query <QUERY>` | Executed before searching notes and content. |
 | `test` | `did test` | Executed during repository health check. |
 | `help` | `did help [TOPIC]` | Executed when invoking help or running without subcommands to display way-of-working instructions. |
 

@@ -1,65 +1,62 @@
-# did - Filesystem-Native Issue Tracker with Hooks
+# did - Filesystem-Native Note & Workflow Tracker with Hooks
 
-`did` is a lightweight, filesystem-native issue tracker that uses directory structures, relative symlinks, and event-driven lifecycle hooks to build programmable, local software factories and development workflows.
+`did` is a lightweight, filesystem-native note and workflow tracker that uses directory structures, relative symlinks, and event-driven lifecycle hooks to build programmable, local software factories, note archives, and development workflows.
 
-All issues live in `.did/` as Markdown files, making state transparent and fully version-controlled with Git.
+All notes live in `.did/` as Markdown files, making state transparent and fully version-controlled with Git.
 
 ## Key Features
 
-- **Filesystem State**: All tasks live in `.did/` as Markdown files.
-- **Lifecycle Hooks**: Define custom hooks in `.hooks/` (e.g. `test`, `show`, `status`, `add`, `close`, `open`, `mv`, `blocks`, `rm`, `help`) to enforce rules and automate workflows.
-- **Prerequisites & Dependencies**: Use `did blocks` to express dependencies between sub-tasks across directories.
-- **Actionable Tracking**: `did status` identifies actionable leaf tasks whose sub-items/dependencies are resolved.
+- **Filesystem State**: All notes live in `.did/` as Markdown files.
+- **Lifecycle Hooks**: Define custom hooks in `.hooks/` (e.g. `test`, `show`, `status`, `add`, `close`, `open`, `mv`, `link`, `rm`, `help`) to enforce rules and automate workflows.
+- **Note Linking**: Use `did link` to express relative symlink relationships between notes across directories.
+- **Subject Hierarchies & Status**: `did status` lists open notes across topic and subject directories.
 
 For advanced documentation, hook specifications, and environment variable references, see [ADVANCED.md](ADVANCED.md).
 
 ## Quick Start
 
-### 1. Add Issues
+### 1. Add Notes
 ```bash
-# Add an issue with a title (auto-creates .did/ directory if needed)
+# Add a note with a title (auto-creates .did/ directory if needed)
 did add "Implement JWT token validation"
 
-# Add an issue with piped body content
+# Add a note with piped body content
 echo "Detailed requirements..." | did add "Implement JWT token validation"
 
-# Pipe directly into did without a subcommand to create an issue
+# Pipe directly into did without a subcommand to create a note
 echo -e "Fix login bug\n\nSteps to reproduce..." | did
 ```
 
-### 2. Block Sub-Tasks
+### 2. Link Notes
 ```bash
-# Mark a task as a prerequisite for another directory
-did blocks refine/auth/jwt.md refine/ui
+# Create a relative symlink from a note into another directory
+did link refine/auth/jwt.md refine/ui
 ```
 
-### 3. Move Issues Across Workflow Stages
+### 3. Move Notes Across Workflow Stages
 ```bash
-# Move refined issue into implement stage
+# Move refined note into implement stage
 did mv refine/auth/jwt.md implement/auth/jwt.md
 ```
 
 ### 4. Check Status
 ```bash
-# List actionable issues
+# List open notes
 did status
 
 # Display directory tree view
 did status --tree
-
-# List blocked tasks
-did status -b
 ```
 
-### 5. Inspect & Resolve Issues
+### 5. Inspect & Resolve Notes
 ```bash
-# Inspect issue content
+# Inspect note content
 did show implement/auth/jwt.md
 
-# Mark task closed (dot-prefixes filename)
+# Mark note resolved (dot-prefixes filename)
 did close implement/auth/jwt.md
 
-# Reopen task
+# Reopen note
 did open implement/auth/jwt.md
 ```
 
@@ -71,7 +68,7 @@ did test
 
 ### 7. Interactive Fuzzy Finder
 ```bash
-# Browse issues interactively with issue preview (requires fzf)
+# Browse notes interactively with note preview (requires fzf)
 did fzf
 ```
 
