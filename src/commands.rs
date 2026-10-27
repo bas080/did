@@ -192,7 +192,7 @@ fn require_repo(repo_opt: Option<Repo>) -> Result<Repo, ExitCode> {
     match repo_opt {
         Some(repo) => Ok(repo),
         None => {
-            eprintln!("error: no .did state directory found.");
+            eprintln!("error: no .did state directory found. Run 'did init' to initialize a repository.");
             Err(ExitCode::FAILURE)
         }
     }
@@ -376,6 +376,8 @@ pub fn cmd_add_with_content(repo: &Repo, title_opt: Option<&str>, stdin_content:
         eprintln!("error writing file: {}", e);
         return ExitCode::FAILURE;
     }
+
+    println!("{}", target_rel);
 
     ExitCode::SUCCESS
 }
