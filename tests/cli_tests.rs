@@ -1671,6 +1671,8 @@ fn test_add_empty_stdin_error() {
     let (success, _, stderr) = did_cmd_stdin(root, &["add"], "   \n\t ");
     assert!(!success);
     assert!(stderr.contains("note title or piped stdin required"));
+    assert!(stderr.contains("To create a note non-interactively"));
+    assert!(stderr.contains("1. Pass a title argument:"));
 }
 
 #[test]

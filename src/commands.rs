@@ -232,10 +232,69 @@ fn title_to_filename(title: &str) -> String {
 
 pub fn cmd_add(repo: &Repo, title_opt: Option<&str>) -> ExitCode {
     let mut stdin_content = String::new();
+    let is_interactive = std::io::stdin().is_terminal() && std::io::stdout().is_terminal();
     if !std::io::stdin().is_terminal() {
         let _ = std::io::stdin().read_to_string(&mut stdin_content);
     }
+
+    if title_opt.map(|s| s.trim().is_empty()).unwrap_or(true) && stdin_content.trim().is_empty() {
+        if is_interactive {
+            return cmd_add_interactive_editor(repo);
+        } else {
+            eprintln!("error: note title or piped stdin required for 'did add'\n");
+            eprintln!("To create a note non-interactively (for scripts and AI agents), use one of the following methods:\n");
+            eprintln!("1. Pass a title argument:");
+            eprintln!("   did add \"Title of the note\"\n");
+            eprintln!("2. Pipe body content with a title:");
+            eprintln!("   echo \"Note body content\" | did add \"Title of the note\"\n");
+            eprintln!("3. Pipe markdown directly into did:");
+            eprintln!("   echo -e \"# Note Title\\n\\nDetailed body description...\" | did");
+            return ExitCode::FAILURE;
+        }
+    }
+
     cmd_add_with_content(repo, title_opt, &stdin_content)
+}
+
+fn cmd_add_interactive_editor(repo: &Repo) -> ExitCode {
+    let editor = env::var("EDITOR")
+        .or_else(|_| env::var("VISUAL"))
+        .unwrap_or_else(|_| if cfg!(windows) { "notepad".to_string() } else { "nano".to_string() });
+
+    let temp_dir = env::temp_dir();
+    let temp_file = temp_dir.join(format!("did_new_note_{}.md", std::process::id()));
+
+    let template = "# Note Title\n\nWrite note body here...\n";
+    if let Err(e) = fs::write(&temp_file, template) {
+        eprintln!("error writing temporary editor file: {}", e);
+        return ExitCode::FAILURE;
+    }
+
+    let status = Command::new(&editor)
+        .arg(&temp_file)
+        .status();
+
+    match status {
+        Ok(s) if s.success() => {
+            if let Ok(content) = fs::read_to_string(&temp_file) {
+                let _ = fs::remove_file(&temp_file);
+                if content.trim().is_empty() || content.trim() == template.trim() {
+                    eprintln!("Aborted: empty note or template unchanged.");
+                    return ExitCode::FAILURE;
+                }
+                cmd_add_with_content(repo, None, &content)
+            } else {
+                let _ = fs::remove_file(&temp_file);
+                eprintln!("error reading note from editor.");
+                ExitCode::FAILURE
+            }
+        }
+        _ => {
+            let _ = fs::remove_file(&temp_file);
+            eprintln!("error: failed to run editor '{}'", editor);
+            ExitCode::FAILURE
+        }
+    }
 }
 
 pub fn cmd_add_with_content(repo: &Repo, title_opt: Option<&str>, stdin_content: &str) -> ExitCode {
