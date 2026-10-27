@@ -72,10 +72,15 @@ impl Repo {
         target
     }
 
-    /// Returns the path relative to `did_dir` (e.g. "backend/auth/jwt.md").
+    /// Returns the path relative to the repository root (e.g. ".did/backend/auth/jwt.md").
     pub fn relative_display_path(&self, full_path: &Path) -> String {
+        if let Some(repo_root) = self.did_dir.parent() {
+            if let Ok(rel) = full_path.strip_prefix(repo_root) {
+                return rel.to_string_lossy().to_string();
+            }
+        }
         if let Ok(rel) = full_path.strip_prefix(&self.did_dir) {
-            rel.to_string_lossy().to_string()
+            Path::new(".did").join(rel).to_string_lossy().to_string()
         } else {
             full_path.to_string_lossy().to_string()
         }
@@ -207,7 +212,7 @@ mod tests {
         assert_eq!(path2, repo.did_dir.join("backend/auth/jwt.md"));
 
         let rel_display = repo.relative_display_path(&path1);
-        assert_eq!(rel_display, "backend/auth/jwt.md");
+        assert_eq!(rel_display, ".did/backend/auth/jwt.md");
     }
 
     #[test]

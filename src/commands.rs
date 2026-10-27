@@ -2455,14 +2455,6 @@ fn escape_json(s: &str) -> String {
 }
 
 fn clean_task_path(git_path: &str) -> String {
-    let p = Path::new(git_path);
-    let mut components = p.components();
-    if let Some(first) = components.next() {
-        if first.as_os_str() == ".did" {
-            let rest: PathBuf = components.collect();
-            return rest.to_string_lossy().to_string();
-        }
-    }
     git_path.to_string()
 }
 
